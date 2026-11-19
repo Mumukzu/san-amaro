@@ -36,11 +36,15 @@ export class Minimap {
     // Plaza.
     c.fillStyle = '#5a6a7a';
     c.beginPath(); c.arc(toX(0), toY(0), 12 * SCALE, 0, Math.PI * 2); c.fill();
-    // North indicator.
+    // Cardinal letters at the four edges (N top, S bottom, E right, W
+    // left) — north is up, so they are fixed, not rotated.
     c.fillStyle = '#e8e8e8';
     c.font = 'bold 13px system-ui, sans-serif';
     c.textAlign = 'center';
     c.fillText('N', SIZE / 2, 14);
+    c.fillText('S', SIZE / 2, SIZE - 6);
+    c.fillText('E', SIZE - 8, SIZE / 2 + 5);
+    c.fillText('W', 8, SIZE / 2 + 5);
   }
 
   update() {

@@ -66,11 +66,13 @@
   .mission .meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
   .mission .meta b { color: var(--accent3); }
 
-  .topmid { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); text-align: center; }
+  .topmid { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.8); }
   .stars { font-size: 26px; letter-spacing: 4px; color: var(--accent3); text-shadow: 0 0 12px rgba(255, 210, 62, 0.6); }
-  .stars .off { color: rgba(255, 255, 255, 0.28); text-shadow: none; }
+  .stars .off { color: rgba(255, 255, 255, 0.85); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.8); }
   .stars.hot { color: var(--danger); text-shadow: 0 0 12px rgba(255, 42, 26, 0.7); }
   .topmid .clock { margin-top: 2px; font-size: 13px; font-weight: 800; letter-spacing: 0.1em; }
+  .topmid .clock-sub { font-size: 10px; font-weight: 800; letter-spacing: 0.22em; color: var(--accent3); margin-top: 1px; }
+  .topmid .wanted-status { margin-top: 4px; }
   .topmid .money { font-size: 22px; font-weight: 900; color: var(--accent3); margin-top: 2px; }
   .topmid .rep { margin: 6px auto 0; width: 220px; text-align: left; }
   .topmid .rep .row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
@@ -79,8 +81,8 @@
 
   .mapwrap { position: absolute; right: 18px; top: 16px; text-align: right; }
   .mapwrap .minimap { width: 168px; height: 168px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.35); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); background: #10121a; }
-  .mapwrap .district { margin-top: 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.05em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
-  .mapwrap .street { font-size: 11px; color: #c8cfdb; text-align: right; margin-top: 2px; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
+  .mapwrap .district { margin-top: 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.05em; text-align: right; text-shadow: 0 1px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.9); }
+  .mapwrap .street { font-size: 11px; color: #c8cfdb; text-align: right; margin-top: 2px; text-shadow: 0 1px 6px rgba(0,0,0,0.95), 0 0 3px rgba(0,0,0,0.9); }
 
   .police { position: absolute; right: 18px; top: 300px; width: 240px; }
   .police h4 { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
@@ -193,18 +195,20 @@
     <div class="label">Chapter 1 · Mission 1</div>
     <h3>FIRST <span>WHEELS</span></h3>
     <div class="obj" id="hud-objective">Explore San Amaro</div>
-    <div class="hint">Steal a car, then drive to the pink marker.</div>
-    <div class="bar"><i></i></div>
-    <div class="meta"><span>Stage 1 / 3</span><span>PAR BONUS <b>+$100</b></span></div>
+    <div class="hint" id="hud-mission-hint">Steal a car, then drive to the pink marker.</div>
+    <div class="bar"><i id="hud-mission-bar"></i></div>
+    <div class="meta"><span id="hud-mission-stage">Stage 1 / 3</span><span>PAR BONUS <b id="hud-mission-time">+$100 · 00:00 / 02:41</b></span></div>
   </div>
 
   <div class="topmid">
-    <div class="stars" id="hud-stars">☆☆☆</div>
-    <div class="clock" id="hud-clock">SUNSET</div>
+    <div class="stars" id="hud-stars">☆☆☆☆☆</div>
+    <span class="badge grey wanted-status" id="hud-wanted-status" style="display:none">CLEAN</span>
+    <div class="clock" id="hud-clock">DAY 1 · 18:24</div>
+    <div class="clock-sub" id="hud-clock-sub">GOLDEN HOUR</div>
     <div class="money" id="hud-money">$250</div>
     <div class="rep panel">
-      <div class="row"><span>NOBODY</span><span>0 / 200 XP</span></div>
-      <div class="bar"><i style="width:0%"></i></div>
+      <div class="row"><span id="hud-rep-level">NOBODY</span><span id="hud-rep-xp">0 / 200 XP</span></div>
+      <div class="bar"><i id="hud-rep-fill" style="width:0%"></i></div>
     </div>
   </div>
 
@@ -216,14 +220,14 @@
 
   <div class="police panel" id="hud-police" style="display:none">
     <h4>SAMPD RESPONSE</h4>
-    <div class="unit"><b>BAY-12</b><span id="hud-police-dist">—</span><span class="badge red">PURSUIT</span></div>
-    <div class="unit"><b>VICTOR-7</b><span>—</span><span class="badge grey">STANDBY</span></div>
-    <div class="unit"><b>AIR-1</b><span>—</span><span class="badge grey">STANDBY</span></div>
+    <div class="unit"><b>BAY-12</b><span id="hud-police-dist">—</span><span class="badge red" id="hud-police-bay-badge">PURSUIT</span></div>
+    <div class="unit"><b>VICTOR-7</b><span id="hud-police-victor-dist">—</span><span class="badge grey" id="hud-police-victor-badge">STANDBY</span></div>
+    <div class="unit"><b>AIR-1</b><span id="hud-police-air-dist">—</span><span class="badge grey" id="hud-police-air-badge">STANDBY</span></div>
   </div>
 
   <div class="vitals panel">
     <div class="row"><span class="label">HEALTH</span><div class="bar health"><i id="hud-health-fill" style="width:100%"></i></div><span class="num" id="hud-health-num">100</span></div>
-    <div class="row"><span class="label">ARMOR</span><div class="bar armor"><i style="width:0%"></i></div><span class="num">0</span></div>
+    <div class="row"><span class="label">ARMOR</span><div class="bar armor"><i id="hud-armor-fill" style="width:0%"></i></div><span class="num" id="hud-armor-num">0</span></div>
     <div class="crew">
       <div class="member"><svg class="portrait" viewBox="0 0 38 38"><rect width="38" height="38" fill="#3a3f45"/><circle cx="19" cy="17" r="9" fill="#8a5a3a"/><path d="M11 13 Q19 6 27 13 L27 16 Q19 10 11 16 Z" fill="#c23a2a"/><rect x="7" y="26" width="24" height="12" fill="#6a4a2a"/></svg>NADIA</div>
       <div class="member"><svg class="portrait" viewBox="0 0 38 38"><rect width="38" height="38" fill="#5a3ab0"/><circle cx="19" cy="17" r="9" fill="#c98d64"/><path d="M11 12 Q19 4 27 12 L27 15 Q19 8 11 15 Z" fill="#8a8a8a"/><rect x="7" y="26" width="24" height="12" fill="#3a5ab0"/></svg>THEO</div>
@@ -240,17 +244,17 @@
   </div>
 
   <div class="veh panel" id="hud-vehicle" style="display:none">
-    <h4>MARINA SEDAN <span>· SEDAN</span></h4>
+    <h4><span id="hud-vehicle-name">MARINA SEDAN</span> <span id="hud-vehicle-class">· SEDAN</span></h4>
     <div class="speed"><span id="hud-speed">0 km/h</span></div>
     <div class="cond"><span>CONDITION</span><span id="hud-cond-num">100%</span></div>
     <div class="bar cond"><i id="hud-cond-fill" style="width:100%"></i></div>
     <div class="cond"><span>NITRO</span><span id="hud-nitro-num">100%</span></div>
     <div class="bar nitro"><i id="hud-nitro-fill" style="width:100%"></i></div>
     <div class="radio">
-      <span class="station">NEON TIDE 102.5</span>
+      <span class="station" id="hud-radio-station">NEON TIDE 102.5</span>
       <span class="eq"><i></i><i></i><i></i><i></i><i></i></span>
-      <div class="track">“Neon Horizon” — Midnight Palms</div>
-      <div class="genre">Synthwave · Golden-hour driving</div>
+      <div class="track" id="hud-radio-track">“Neon Horizon” — Midnight Palms</div>
+      <div class="genre" id="hud-radio-genre">Synthwave · Golden-hour driving</div>
     </div>
   </div>
 

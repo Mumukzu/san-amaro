@@ -12,6 +12,11 @@ export function loadSave() {
     if (typeof data.bestEscape === 'number') state.bestEscape = data.bestEscape;
     if (typeof data.missionsDone === 'number') state.missionsDone = data.missionsDone;
     if (typeof data.timePreset === 'string') state.timePreset = data.timePreset;
+    // HUD state carried across sessions: reputation, day/clock, armour.
+    if (typeof data.rep === 'number') state.rep = data.rep;
+    if (typeof data.day === 'number') state.day = data.day;
+    if (typeof data.clockMinutes === 'number') state.clockMinutes = data.clockMinutes;
+    if (typeof data.armor === 'number') state.armor = data.armor;
   } catch {
     // Corrupt or unavailable storage: play fresh.
   }
@@ -24,6 +29,10 @@ export function saveGame() {
       bestEscape: state.bestEscape,
       missionsDone: state.missionsDone,
       timePreset: state.timePreset,
+      rep: state.rep,
+      day: state.day,
+      clockMinutes: state.clockMinutes,
+      armor: state.armor,
     }));
   } catch {
     // Storage can be off (private windows): the save then lasts this visit only.

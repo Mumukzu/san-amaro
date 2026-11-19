@@ -143,6 +143,12 @@ function startGame() {
   hudEl.classList.remove('hidden');
   camera.mode = state.inCar ? 'drive' : 'follow';
   updateContinueSub();
+  // The drop-off marker belongs to Mission 1: if this session has none
+  // (a continued save from before markers existed), place it now.
+  if (!state.marker && !state.missionDone) {
+    state.marker = { x: 150, z: 50 };
+    state.markerLabel = 'Drop-off';
+  }
   showDialogue('NADIA · PALM & PISTON',
     '\u201CYou break it, you bought it. Get the car to the marker \u2014 and don\u2019t scratch the paint.\u201D');
   announce('Playing. Explore San Amaro.');
@@ -155,6 +161,21 @@ function newGame() {
   state.timePreset = DEFAULT_TIME;
   state.nitro = 100;
   state.condition = 100;
+  state.health = 100;
+  state.armor = 0;
+  state.rep = 0;
+  state.day = 1;
+  state.clockMinutes = 18 * 60 + 24; // golden hour
+  // Mission 1 starts fresh: the drop-off marker is the pink diamond on
+  // the minimap from the first minute.
+  state.missionStage = 1;
+  state.missionProgress = 0;
+  state.missionTime = 0;
+  state.missionDone = false;
+  state.missionStartDist = 0;
+  state.objective = 'Find a car to steal';
+  state.marker = { x: 150, z: 50 };
+  state.markerLabel = 'Drop-off';
   sky.applyPreset(DEFAULT_TIME, true);
   applyGlow();
   saveGame();
@@ -327,6 +348,12 @@ function driveCar(dt) {
 // ---- One fixed step (1/60 s) ----
 function step(dt) {
   state.time += dt;
+  // In-game clock: 1 game minute per 2 real seconds; rolls to the next day.
+  state.clockMinutes += dt * 0.5;
+  if (state.clockMinutes >= 1440) {
+    state.clockMinutes -= 1440;
+    state.day += 1;
+  }
   if (input.takeAction('pause')) {
     pauseGame();
     return;
@@ -365,6 +392,54 @@ function step(dt) {
   peds.update(dt);
   if (state.wanted > 0) police.update(dt, bustGame);
   vehicles.updateVisuals(dt);
+  updateMission(dt);
+}
+
+// ---- Mission 1 "First Wheels" (3 stages, derived from real game state) ----
+// Stage 1: on foot — find a car (progress = closeness to the nearest
+// stealable car). Stage 2: steal it (completes the instant you get in).
+// Stage 3: drive to the pink marker (progress = distance closed).
+// Finishing under the 2:41 par pays +$100, otherwise +$50; +100 rep either way.
+function updateMission(dt) {
+  if (state.missionDone) return;
+  state.missionTime += dt;
+  if (state.missionStage === 1) {
+    const near = vehicles.nearestStealable(player.pos, 60);
+    const d = near ? Math.hypot(near.pos.x - player.pos.x, near.pos.z - player.pos.z) : 60;
+    state.missionProgress = (1 - Math.min(1, d / 60)) / 3;
+    state.objective = 'Find a car to steal';
+    document.getElementById('hud-mission-hint').textContent = 'Look for a parked car — the pink marker is the drop-off.';
+    if (state.inCar) {
+      // Stage 2 (the steal) completes the instant you get in.
+      state.missionStage = 3;
+      state.missionProgress = 2 / 3;
+      state.missionStartDist = state.marker
+        ? Math.hypot(state.marker.x - player.pos.x, state.marker.z - player.pos.z)
+        : 200;
+      state.rep += 25; // stealing a car is street cred
+      state.objective = 'Drive to the marker';
+      document.getElementById('hud-mission-hint').textContent = 'Don’t scratch the paint — the SAMPD is watching.';
+    }
+    return;
+  }
+  if (state.missionStage === 3 && state.marker) {
+    const p = state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
+    const d = Math.hypot(state.marker.x - p.x, state.marker.z - p.z);
+    const closed = state.missionStartDist > 0
+      ? 1 - Math.min(1, d / state.missionStartDist)
+      : 0;
+    state.missionProgress = 2 / 3 + closed / 3;
+    if (d < 6) {
+      state.missionDone = true;
+      state.missionProgress = 1;
+      state.missionsDone += 1;
+      state.rep += 100;
+      const underPar = state.missionTime <= state.missionPar;
+      state.money += underPar ? 100 : 50;
+      state.objective = 'Mission complete — First Wheels';
+      hud.toast(underPar ? 'Mission complete! PAR BONUS +$100' : 'Mission complete! +$50');
+    }
+  }
 }
 
 // ---- Menu buttons ----
@@ -398,10 +473,32 @@ function updatePanels() {
   }
   const pol = document.getElementById('hud-police');
   pol.style.display = state.wanted > 0 ? 'block' : 'none';
-  if (state.wanted > 0 && police.cruiser) {
-    const p = state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
-    const d = Math.hypot(police.cruiser.car.pos.x - p.x, police.cruiser.car.pos.z - p.z);
-    document.getElementById('hud-police-dist').textContent = `${Math.round(d)} m`;
+  if (state.wanted > 0) {
+    // BAY-12 is the real cruiser on scene (PURSUIT + live distance).
+    // VICTOR-7 and AIR-1 are dispatch states, not units on the map: they
+    // read EN ROUTE once the heat is high enough, STANDBY below that.
+    // Their distance stays "—" — there is no second cruiser to measure.
+    if (police.cruiser) {
+      const p = state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
+      const d = Math.hypot(police.cruiser.car.pos.x - p.x, police.cruiser.car.pos.z - p.z);
+      document.getElementById('hud-police-dist').textContent = `${Math.round(d)} m`;
+    }
+    const victor = document.getElementById('hud-police-victor-badge');
+    const air = document.getElementById('hud-police-air-badge');
+    if (state.wanted >= 2) {
+      victor.textContent = 'EN ROUTE';
+      victor.className = 'badge gold';
+    } else {
+      victor.textContent = 'STANDBY';
+      victor.className = 'badge grey';
+    }
+    if (state.wanted >= 3) {
+      air.textContent = 'EN ROUTE';
+      air.className = 'badge gold';
+    } else {
+      air.textContent = 'STANDBY';
+      air.className = 'badge grey';
+    }
   }
 }
 

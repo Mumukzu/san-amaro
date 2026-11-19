@@ -167,6 +167,42 @@ Tick an item only after it is verified in the running game via Playwright.
       Close-up trick learned: ?shot paints only twice and never loops —
       a camera move needs a manual renderer.render() in the evaluate.
 
+## Step 4 — FULL HUD (Mu 19 Nov ~14:14, order #4)
+- [x] Wanted: 5 star slots (the GTA scale; this slice caps at 3) + a
+      status badge — SPOTTED (1, gold), IN PURSUIT (2, red), HEAVY
+      PURSUIT (3, red). Empty stars are bright white with a dark outline
+      so they read on pale day skies too.
+- [x] Clock: "DAY n · HH:MM" advancing (1 game-min per 2 real-sec,
+      rolls to the next day) + period label — DAY / GOLDEN HOUR / NIGHT.
+      The clock matches the preset (day 11:30, sunset 18:24, night 21:45).
+- [x] Mission 1 "First Wheels" is now a REAL 3-stage mission
+      (main.js updateMission): stage 1 find a car (progress = closeness),
+      stage 2 steal it (completes on entry, +25 rep), stage 3 drive to
+      the marker (progress = distance closed). Finish under the 2:41 par
+      for +$100, else +$50; +100 rep. The panel shows stage, overall
+      progress bar, elapsed / par time, and a per-stage hint.
+- [x] Police panel: BAY-12 PURSUIT + live distance (the real cruiser);
+      VICTOR-7 EN ROUTE at wanted >= 2, AIR-1 EN ROUTE at wanted 3 —
+      dispatch states, distance stays "—" (no second cruiser to measure).
+- [x] Vehicle readout: the driven car's real name + class (COMET GT ·
+      SPORTS, MARINA SEDAN · SEDAN, …) via CAR_NAMES in vehicles.js.
+- [x] Radio widget: 3 bible stations follow the time of day (Neon Tide
+      sunset, The Dock day, K-VIBE night); tracks cycle every 40 s.
+- [x] Health + armour: both numbers AND bars are live (armour was a
+      static 0; state.armor added, saved across sessions with rep/day/
+      clock). Rep bar wired (Nobody/Street/Known/… ladder).
+- [x] Minimap: N/S/E/W cardinal letters on the static layer.
+- [x] Readability: topmid + district/street get a dark text-shadow so
+      the HUD reads on pale day skies, not just dark ones.
+- [x] Shot staging (shots.js) now advances the clock + mission timer
+      during simulate(), and syncs the mission stage/progress to the
+      staged moment (stage 3 for the chase/mission shots, stage 1 on
+      foot) — before this the panel read Stage 1 / 00:00 in every shot.
+- [x] Playwright QA, 3 rounds: r1 (full HUD lands, 0 errors), r2
+      (mission sync + clock-per-preset + readability; shot 3/4 honest),
+      r3 (empty stars visible, night readable). 0 console errors on all
+      shots. Calls: shot 1 = 339, shot 2 = 382, shot 3 = 306, shot 4 = 345.
+
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
   deleted — Mu 19 Nov ~13:39: never delete any file that is part of the

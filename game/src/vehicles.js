@@ -9,6 +9,16 @@ import { state } from './state.js';
 
 const SEDAN_COLORS = [0xc23a2a, 0x2a6ac2, 0xe8b832, 0x3a3f45, 0x2a7a4a, 0xd8d4c8, 0xff7a1a, 0x7a3ab0];
 
+// Display names per class (bible §6) — shown in the HUD vehicle panel.
+export const CAR_NAMES = {
+  sedan: 'MARINA SEDAN', sports: 'COMET GT', muscle: 'BRUISER',
+  van: 'HOPPER VAN', truck: 'LONGHAUL', police: 'INTERCEPTOR',
+};
+const CAR_CLASS_LABELS = {
+  sedan: 'SEDAN', sports: 'SPORTS', muscle: 'MUSCLE',
+  van: 'VAN', truck: 'TRUCK', police: 'SAMPD',
+};
+
 // Per-class silhouettes (bible §6: 9 vehicles). Each class has its own
 // body/cabin/details geometry, built once and shared by every car of the
 // class — so 34 cars still cost ~2-3 meshes each, not a mesh per detail.
@@ -204,6 +214,7 @@ export class Vehicles {
     const wheelX = cdef.w / 2 - 0.12;
     const car = {
       id, kind: opts.kind || 'sedan', class: cls, color: opts.color,
+      name: CAR_NAMES[cls], classLabel: CAR_CLASS_LABELS[cls],
       group, pos: new THREE.Vector3(opts.x, 0, opts.z),
       heading: opts.heading, speed: 0, steer: 0,
       parked: !!opts.parked, stolen: false, isPolice: opts.kind === 'police',
