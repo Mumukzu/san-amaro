@@ -421,12 +421,22 @@ compact again.
       files (one genuine top comment each).
 - [x] Authorship sweep: a genuine line in all 45 counted files
       (verified by replicating the recorder's rule in Python).
-- [ ] Screenshots re-shot (4/4, 1280x720, <=256 KiB each) with the
-      close behind-car cover; palm-in-the-road PASS/FAIL checked
-      (sizes below, to be filled after the QA run).
-- [ ] Live-play verification: menu -> Continue -> walk -> steal sedan
-      -> drive, wanted 1 -> 2, VICTOR-7 live. 0 console errors;
-      network localhost-only. Kit check 4 passed / 0 failed.
+- [x] Screenshots re-shot (4/4, 1280x720, <=256 KiB each) with the
+      close behind-car cover; palm-in-the-road PASS/FAIL checked —
+      cover rounds r1/r2/r3 all PASS (3/3, 0 console errors each,
+      composition identical to the 40afa90 cover): 1-chase.jpg
+      (185,012 B), 2-mission.jpg (158,093 B), 3-drift.jpg (160,247 B),
+      4-night.jpg (185,608 B). Shots 2–4 match the target frames
+      exactly (no regressions); known nits unchanged (shot 2 stars
+      legible over the Spire; shot 3 water a thin strip at the horizon).
+- [x] Live-play verification: menu -> Continue -> walk -> steal sedan
+      -> drive, wanted 1 -> 2, VICTOR-7 live ("221 m", "IN PURSUIT ·
+      2 UNITS"). Full HUD confirmed (mission "Explore San Amaro"
+      Stage 1/3, 5 stars, health 100, armor 0, money $250, rep NOBODY,
+      radio NEON TIDE 102.5, crew 3, weapons 5, dialogue). 0 console
+      errors; network localhost-only (35 requests, all
+      http://localhost:8080/). Kit check 4 passed / 0 failed
+      (level-26 kit CLI).
 - [ ] SUBMIT — NOT done in this session. Mu approves the re-authored
       result first. Recording 01a1f330 still running; do NOT seal here.
 
