@@ -458,7 +458,10 @@ function updatePlayer(dt) {
     // mission: reached the marker?
     if (state.mission.stage === 1) {
       const d = Math.hypot(car.group.position.x - MISSION_MARKER.x, car.group.position.z - MISSION_MARKER.z);
-      if (d < 9) {
+      // 16 m: the car starts at (4, 12) facing east, so a straight-east run
+      // passes 12 m from the marker (120, 0) — the old 9 m radius missed
+      // even a perfect straight line.
+      if (d < 16) {
         state.mission.stage = 2; updateMissionHUD();
         HUD.setDialogue('NADIA · PALM & PISTON', '“Marker reached. Now lose them — full throttle.”', 'nadia', '#8a5a3a', '#1c1410');
         Audio.cashChime();
@@ -492,17 +495,30 @@ function updatePolice(dt) {
     return;
   }
   const target = state.driving && state.car ? state.car.group.position : jay.group.position;
-  const speed = 11 + state.wanted * 1.5;
+  // Once the marker is reached (stage 2, "lose the police") the cruisers
+  // ease off a little, so a good driver can actually open a gap — at their
+  // full 12.5 m/s the car (14.44 m/s) only gains 1.94 m/s and the old 90 m
+  // evade requirement was mathematically unreachable.
+  const speed = state.mission.stage === 2 ? 10.5 : 11 + state.wanted * 1.5;
   police.slice(0, 2).forEach((u, i) => {
     if (!u.group.visible) u.group.visible = true;
+    u._ramCd = Math.max(0, (u._ramCd || 0) - dt);
     const p = u.group.position;
     const dx = target.x - p.x, dz = target.z - p.z;
     const dist = Math.hypot(dx, dz);
     if (dist < 3.5) {
-      // ram: shove the player and chip the car's condition
-      if (state.driving && state.car) {
-        state.speed = Math.max(0, state.speed - 6);
+      // ram: a bounded one-off shove, not a per-frame drain. The old code
+      // took 6 m/s per cruiser per frame while the car only gains ~0.23
+      // m/s/frame at 60 FPS, so one touch pinned the car at 0 forever.
+      // Now one ram costs 4 m/s, then that cruiser cannot ram again for
+      // 1.5 s, and it is shoved back so it must re-approach — the player
+      // can always accelerate away.
+      if (state.driving && state.car && u._ramCd <= 0) {
+        state.speed = Math.max(0, state.speed - 4);
+        u._ramCd = 1.5;
         HUD.setVehicle({ condition: 96 });
+        p.x -= Math.sin(u.group.rotation.y) * 5;
+        p.z -= Math.cos(u.group.rotation.y) * 5;
       }
       return;
     }
@@ -531,13 +547,19 @@ function updatePolice(dt) {
       target.z + Math.sin(heliAngle) * 26);
     heli.rotor.rotation.y += dt * 22;
   }
-  // wanted decays if the player is far from all cruisers
+  // wanted decays if the player is far from all cruisers. The old 90 m / 6 s
+  // evade requirement was unreachable: the car gains at most 1.94 m/s on a
+  // cruiser and the longest straight yields a ~83 m gap. 55 m for 4 s is
+  // completable by a good driver (about 15 s of clean driving after the
+  // marker, with the cruisers eased to 10.5 m/s in stage 2) without being
+  // trivial.
+  const EVADE_DIST = 55, EVADE_HOLD = 4;
   if (state.mode === 'play') {
     const d0 = police[0].group.position.distanceTo(target);
     const d1 = police[1].group.position.distanceTo(target);
-    if (Math.min(d0, d1) > 90) {
+    if (Math.min(d0, d1) > EVADE_DIST) {
       state._clearT = (state._clearT || 0) + dt;
-      if (state._clearT > 6) {
+      if (state._clearT > EVADE_HOLD) {
         state._clearT = 0;
         if (state.mission.stage === 2) {
           state.mission.done = true; state.money += 500; state.xp = Math.min(state.xpMax, state.xp + 200);
