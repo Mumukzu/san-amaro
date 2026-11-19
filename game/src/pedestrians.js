@@ -32,10 +32,16 @@ export class Pedestrians {
       const bz = rng() < 0.65 ? pick(rng, central) : pick(rng, WORLD.blockAt);
       const loop = sidewalkLoop(bx, bz);
       const wp = Math.floor(rng() * 4);
+      // Variety: ~1 in 4 wears a cap, ~1 in 13 is a SAMPD officer on foot
+      // (navy uniform + cap + badge), so the police have a street presence.
+      const isPolice = i % 13 === 5;
+      const cap = isPolice ? 0x141c2e : (rng() < 0.25 ? pick(rng, [0xc23a2a, 0x2a6ac2, 0xe8b832, 0x3a3f45]) : null);
       const c = buildCharacter({
-        skin: pick(rng, SKINS), jacket: pick(rng, JACKETS),
-        pants: pick(rng, [0x2c3e63, 0x3a3f45, 0x6a5a4a, 0x8a8d90]),
+        skin: pick(rng, SKINS),
+        jacket: isPolice ? 0x1a2a4a : pick(rng, JACKETS),
+        pants: isPolice ? 0x141c2e : pick(rng, [0x2c3e63, 0x3a3f45, 0x6a5a4a, 0x8a8d90]),
         hair: pick(rng, HAIRS),
+        cap, police: isPolice,
       });
       const scale = rand(rng, 0.92, 1.08);
       c.group.scale.setScalar(scale);

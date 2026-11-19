@@ -134,6 +134,39 @@ Tick an item only after it is verified in the running game via Playwright.
       the density is the point, and 274 scene calls is still light for
       desktop Chrome). Tris 58-65K (budget <=1.5M). game/ ~1.0 MB.
 
+## Step 3 — MODELS (Mu 19 Nov ~14:14, order #3)
+- [x] Per-class car silhouettes (vehicles.js CAR_CLASSES): sedan, sports
+      (Comet GT — lower, longer hood, spoiler), muscle (Bruiser — long
+      hood, wide), van (Hopper — tall box + window band, no cabin),
+      truck (Longhaul — cab + flat bed), police (Interceptor + light
+      bar). Each class builds its body/cabin/details once and shares them.
+      Parked cars mix classes (first spot = the pink Marina Sedan);
+      traffic mixes classes too.
+- [x] Details mesh per car (1 call): dark grille, chrome bumper strips,
+      dark mirrors, spoiler blade, van window band — vertex-coloured via
+      mergeColored, which moved from player.js to utils.js (shared).
+- [x] Glass cabin: dark tinted glass (envMap 1.2, roughness 0.15,
+      opacity 0.85), lower profile (sedan 0.52 -> 0.46); the roof panel
+      moved to the BODY geometry (body-coloured paint — a glass roof read
+      as a separate light-grey slab). Police light bar dropped to 1.38
+      with the lower roof.
+- [x] Hubcaps: silver disc InstancedMesh riding the wheel matrices —
+      wheels read as wheels, not black blobs. 1 call for all cars.
+- [x] Characters: vertex-coloured legs with dark shoes (legMesh, one
+      shared material); Jay gets a backwards red cap; ~1 in 4 peds wears
+      a cap; ~1 in 13 peds is a SAMPD officer (navy + cap + gold badge).
+      Cap/badge merge into the body mesh — 0 extra calls. Walk animation
+      (limb swing + bob) already existed and is unchanged.
+- [x] Lamp pink fix: the lamp heads glowed magenta because the metal
+      head reflected the pink sunset sky — metalness 0, emissive 2.6.
+      Heads now glow warm white.
+- [x] Playwright QA, 3 rounds + close-ups: r1 (classes land, 306 calls
+      shot 3), r2 close-ups (player cap visible, car read as a car but
+      roof was a grey slab), r3 (roof body-coloured, lamps warm white).
+      0 console errors on all shots. Shot 3 = 306 calls / 65K tris.
+      Close-up trick learned: ?shot paints only twice and never loops —
+      a camera move needs a manual renderer.render() in the evaluate.
+
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
   deleted — Mu 19 Nov ~13:39: never delete any file that is part of the

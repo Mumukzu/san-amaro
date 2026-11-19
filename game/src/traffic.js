@@ -35,6 +35,9 @@ export class Traffic {
       const car = vehicles.addCar({
         x: start.x + (rng() - 0.5) * 4, z: start.z + (rng() - 0.5) * 4,
         heading: Math.atan2(1, 0), color: pick(rng, colors), isTraffic: true,
+        // Traffic mixes classes too — vans and trucks on the road, not
+        // only sedans, so the moving traffic reads as a real street.
+        class: pick(rng, ['sedan', 'sedan', 'sedan', 'sports', 'muscle', 'van', 'truck']),
       });
       car.autopilot = true;
       car.parked = false;

@@ -83,6 +83,55 @@ export function mergeGeoms(entries) {
   return out;
 }
 
+/** Merge several geometries, each tinted one flat colour, into a single
+ * vertex-coloured geometry (one material, one draw call). Parts are
+ * { geo, matrix?, color }. The character body (torso + head + hair) is
+ * 1 call instead of 3 — that is what makes 40 pedestrians affordable;
+ * car details (grille, chrome, mirrors) ride in one mesh the same way. */
+export function mergeColored(parts) {
+  let vCount = 0; let iCount = 0;
+  for (const p of parts) {
+    vCount += p.geo.attributes.position.count;
+    iCount += p.geo.index.count;
+  }
+  const pos = new Float32Array(vCount * 3);
+  const nor = new Float32Array(vCount * 3);
+  const uv = new Float32Array(vCount * 2);
+  const col = new Float32Array(vCount * 3);
+  const idx = new Uint32Array(iCount);
+  const v = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  const nm = new THREE.Matrix3();
+  const c = new THREE.Color();
+  let vo = 0; let io = 0;
+  for (const p of parts) {
+    const g = p.geo;
+    m.copy(p.matrix || new THREE.Matrix4());
+    nm.getNormalMatrix(m);
+    c.set(p.color);
+    const pa = g.attributes.position; const na = g.attributes.normal; const ua = g.attributes.uv;
+    for (let i = 0; i < pa.count; i += 1) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(m);
+      pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+      n.fromBufferAttribute(na, i).applyMatrix3(nm).normalize();
+      nor[(vo + i) * 3] = n.x; nor[(vo + i) * 3 + 1] = n.y; nor[(vo + i) * 3 + 2] = n.z;
+      uv[(vo + i) * 2] = ua.getX(i); uv[(vo + i) * 2 + 1] = ua.getY(i);
+      col[(vo + i) * 3] = c.r; col[(vo + i) * 3 + 1] = c.g; col[(vo + i) * 3 + 2] = c.b;
+    }
+    const ix = g.index;
+    for (let i = 0; i < ix.count; i += 1) idx[io + i] = ix.getX(i) + vo;
+    vo += pa.count; io += ix.count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
+}
+
 /** A box with its UVs tiled by world size (so facade textures keep density). */
 export function texturedBox(w, h, d, tile = 10) {
   const g = new THREE.BoxGeometry(w, h, d);

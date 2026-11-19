@@ -3,7 +3,7 @@
 // buildCharacter is shared with pedestrians.js for visual variety.
 import * as THREE from 'three';
 import { PLAYER } from './config.js';
-import { angleLerp, circleVsAABB, clamp } from './utils.js';
+import { angleLerp, circleVsAABB, clamp, mergeColored } from './utils.js';
 import { state } from './state.js';
 
 function limb(w, h, d, color, px, py, pz, pivotY, castsShadow = true) {
@@ -18,53 +18,27 @@ function limb(w, h, d, color, px, py, pz, pivotY, castsShadow = true) {
   return mesh;
 }
 
-function mergeColored(parts) {
-  // Merge several geometries, each tinted one flat colour, into a single
-  // vertex-coloured geometry (one material, one draw call). The character
-  // body (torso + head + hair) is 1 call instead of 3 — that is what makes
-  // 40 pedestrians affordable in draw calls. The limbs stay separate
-  // meshes because they rotate for the walk animation.
-  let vCount = 0; let iCount = 0;
-  for (const p of parts) {
-    vCount += p.geo.attributes.position.count;
-    iCount += p.geo.index.count;
+// Legs: vertex-coloured (dark shoes on the bottom 0.14 m, pants above), so
+// a character reads as a person with shoes instead of two coloured sticks.
+// One shared vertex-colours material for every leg — the pants colour rides
+// in the vertex colours, not the material.
+const LEG_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+function legMesh(w, h, d, pants, px, py, pz, pivotY) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  geo.translate(0, -h / 2 + pivotY, 0);
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const pantsC = new THREE.Color(pants);
+  const shoeC = new THREE.Color(0x1a1a1a);
+  for (let i = 0; i < pos.count; i += 1) {
+    const c = pos.getY(i) < pivotY - h + 0.14 ? shoeC : pantsC;
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
-  const pos = new Float32Array(vCount * 3);
-  const nor = new Float32Array(vCount * 3);
-  const uv = new Float32Array(vCount * 2);
-  const col = new Float32Array(vCount * 3);
-  const idx = new Uint32Array(iCount);
-  const v = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const m = new THREE.Matrix4();
-  const nm = new THREE.Matrix3();
-  const c = new THREE.Color();
-  let vo = 0; let io = 0;
-  for (const p of parts) {
-    const g = p.geo;
-    m.copy(p.matrix || new THREE.Matrix4());
-    nm.getNormalMatrix(m);
-    c.set(p.color);
-    const pa = g.attributes.position; const na = g.attributes.normal; const ua = g.attributes.uv;
-    for (let i = 0; i < pa.count; i += 1) {
-      v.fromBufferAttribute(pa, i).applyMatrix4(m);
-      pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
-      n.fromBufferAttribute(na, i).applyMatrix3(nm).normalize();
-      nor[(vo + i) * 3] = n.x; nor[(vo + i) * 3 + 1] = n.y; nor[(vo + i) * 3 + 2] = n.z;
-      uv[(vo + i) * 2] = ua.getX(i); uv[(vo + i) * 2 + 1] = ua.getY(i);
-      col[(vo + i) * 3] = c.r; col[(vo + i) * 3 + 1] = c.g; col[(vo + i) * 3 + 2] = c.b;
-    }
-    const ix = g.index;
-    for (let i = 0; i < ix.count; i += 1) idx[io + i] = ix.getX(i) + vo;
-    vo += pa.count; io += ix.count;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
-  return geo;
+  const mesh = new THREE.Mesh(geo, LEG_MAT);
+  mesh.position.set(px, py, pz);
+  mesh.castShadow = true; // legs define the person's ground silhouette
+  return mesh;
 }
 
 export function buildCharacter(opts = {}) {
@@ -73,14 +47,29 @@ export function buildCharacter(opts = {}) {
   const pants = opts.pants ?? 0x2c3e63;
   const hair = opts.hair ?? 0x1a1a1a;
   const group = new THREE.Group();
-  const legL = limb(0.22, 0.85, 0.24, pants, -0.14, 0.88, 0, 0.85);
-  const legR = limb(0.22, 0.85, 0.24, pants, 0.14, 0.88, 0, 0.85);
-  // One vertex-coloured body mesh: torso + head + hair (they move together).
-  const bodyGeo = mergeColored([
+  const legL = legMesh(0.22, 0.85, 0.24, pants, -0.14, 0.88, 0, 0.85);
+  const legR = legMesh(0.22, 0.85, 0.24, pants, 0.14, 0.88, 0, 0.85);
+  // One vertex-coloured body mesh: torso + head + hair (+ cap + badge).
+  // The cap and badge are merged in — 0 extra draw calls.
+  const bodyParts = [
     { geo: new THREE.BoxGeometry(0.58, 0.62, 0.32), matrix: new THREE.Matrix4().setPosition(0, 1.2, 0), color: jacket },
     { geo: new THREE.SphereGeometry(0.21, 14, 12), matrix: new THREE.Matrix4().setPosition(0, 1.68, 0), color: skin },
     { geo: new THREE.SphereGeometry(0.215, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), matrix: new THREE.Matrix4().setPosition(0, 1.71, -0.01), color: hair },
-  ]);
+  ];
+  if (opts.cap) {
+    // Cap crown + brim. Jay wears his backwards; peds wear theirs forward.
+    bodyParts.push(
+      { geo: new THREE.SphereGeometry(0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), matrix: new THREE.Matrix4().setPosition(0, 1.72, -0.01), color: opts.cap },
+      { geo: new THREE.BoxGeometry(0.3, 0.04, 0.22), matrix: new THREE.Matrix4().setPosition(0, 1.68, opts.backwards ? -0.24 : 0.24), color: opts.cap },
+    );
+  }
+  if (opts.police) {
+    // Gold SAMPD badge on the chest (front-left).
+    bodyParts.push(
+      { geo: new THREE.BoxGeometry(0.09, 0.09, 0.02), matrix: new THREE.Matrix4().setPosition(0.13, 1.36, 0.17), color: 0xd8b83a },
+    );
+  }
+  const bodyGeo = mergeColored(bodyParts);
   const body = new THREE.Mesh(
     bodyGeo,
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }),
@@ -95,7 +84,11 @@ export function buildCharacter(opts = {}) {
 
 export class Player {
   constructor(scene) {
-    const c = buildCharacter({});
+    // Jay Moreno: teal jacket, dark pants, backwards red cap (bible §3).
+    const c = buildCharacter({
+      skin: 0xc98d64, jacket: 0x1f8a8a, pants: 0x2c3e63, hair: 0x1a1a1a,
+      cap: 0xc23a2a, backwards: true,
+    });
     this.parts = c;
     this.group = c.group;
     scene.add(this.group);

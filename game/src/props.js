@@ -114,7 +114,8 @@ export function buildProps(scene) {
   const headGeo = new THREE.BoxGeometry(0.55, 0.28, 0.9);
   const headMat = new THREE.MeshStandardMaterial({
     color: 0x222222, emissive: 0xffd9a0, emissiveIntensity: 0,
-    roughness: 0.4, metalness: 0.3,
+    roughness: 0.4, metalness: 0, // metalness 0: a metal head reflected the
+    // pink sunset sky and the lamp glowed magenta instead of warm yellow.
   });
   lampHeadMats.push(headMat);
   const heads = new THREE.InstancedMesh(headGeo, headMat, lampPos.length);
@@ -412,7 +413,7 @@ export function buildProps(scene) {
     // Night readability: pools are bigger and stronger (0.85), lamp heads
     // burn at 3.2 so bloom catches them — the street must glow, not go black.
     for (const m of glowMats) m.emissiveIntensity = 0.15 + windowGlow * 0.9;
-    for (const m of lampHeadMats) m.emissiveIntensity = lampOn ? 3.2 : 0;
+    for (const m of lampHeadMats) m.emissiveIntensity = lampOn ? 2.6 : 0;
     for (const m of poolMats) m.opacity = lampOn ? 0.85 : 0;
   }
 
