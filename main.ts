@@ -27,9 +27,31 @@ import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } f
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
+import { buildLayout, fixLayout, validationSummary } from './game/src/city-layout.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
+// City layout gate: the plan must validate clean (0 violations) before the
+// entry is handed in. The validator FIXES violations (fixLayout), so a
+// failure here means the layout itself is broken — fail fast and do not
+// ship a city with buildings on roads, trees blocking paths, or furniture
+// on the sidewalk. The result is written to /output/city-validation.json
+// alongside the dossier, so the validation evidence travels with the entry.
+const rawLayout = buildLayout(20261119);
+const fixedLayout = fixLayout(rawLayout, 3);
+if (!fixedLayout.report.passed) {
+  throw new Error(`city layout: ${validationSummary(fixedLayout.report)}`);
+}
+const cityValidation = {
+  passed: fixedLayout.report.passed,
+  summary: validationSummary(fixedLayout.report),
+  counts: fixedLayout.report.counts,
+  byZone: fixedLayout.report.byZone,
+  violations: fixedLayout.report.violations.length,
+  fixesApplied: fixedLayout.passes,
+};
+console.log(`city layout: ${cityValidation.summary}`);
 
 // The gate refuses more than 4 screenshots or any shot over 256 KiB, and a
 // silent copy would only surface at submit — so fail fast here instead.
@@ -47,6 +69,7 @@ if (existsSync(shotDir)) {
 }
 
 mkdirSync(out, { recursive: true });
+writeFileSync(join(out, 'city-validation.json'), JSON.stringify(cityValidation, null, 2) + '\n');
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });

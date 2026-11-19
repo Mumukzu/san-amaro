@@ -124,6 +124,35 @@ export function setVehicle(v) {
 export function hideVehicle() { $('vehicle').style.display = 'none'; }
 export function showVehicle() { $('vehicle').style.display = ''; }
 
+// ---- district / street (from the player's actual zone + nearest street) ----
+// District names for the layout zones; the street line is the nearest
+// named street. Only updates the DOM when the label actually changes, so
+// this can be called every frame cheaply.
+const DISTRICT_NAMES = {
+  downtown: 'DOWNTOWN CORE',
+  commercial: 'COMMERCIAL ROW',
+  residential: 'PALM COURTS',
+  industrial: 'THE YARDS',
+  spire: 'SPIRE DISTRICT',
+  plaza: 'SUNSET PLAZA',
+};
+let lastDistrict = '', lastStreet = '';
+export function setDistrict(zone, street) {
+  const d = DISTRICT_NAMES[zone] || 'SAN AMARO';
+  if (d !== lastDistrict) { $('district').textContent = d; lastDistrict = d; }
+  if (street && street !== lastStreet) { $('street').textContent = street; lastStreet = street; }
+}
+
+// City validation badge (under the minimap): the layout validator's
+// verdict, e.g. "CITY VALID · 80 BUILDINGS · 673 TREES". Green when the
+// city passes, red when it has violations.
+export function setCityBadge(summary, passed) {
+  const el = $('city-badge');
+  if (!el) return;
+  el.textContent = summary || 'CITY VALID';
+  el.style.color = passed === false ? '#ff2a1a' : '#2aff5a';
+}
+
 // ---- dialogue ----
 export function setDialogue(name, line, style, skin, hair) {
   $('dlg-name').textContent = name;

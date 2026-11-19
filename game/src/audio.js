@@ -59,6 +59,49 @@ export function engineStop() {
   if (engineOsc) { try { engineOsc.stop(); } catch {} engineOsc = null; }
 }
 
+// ---- nitro boost whoosh (filtered noise sweeping up) ----
+// Called every frame while boosting; throttled to one whoosh per 0.45 s.
+let nitroLast = 0;
+export function nitroBoost() {
+  if (!ensure()) return;
+  const now = ctx.currentTime;
+  if (now - nitroLast < 0.45) return;
+  nitroLast = now;
+  const t = now;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.5);
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(300, t);
+  f.frequency.exponentialRampToValueAtTime(2400, t + 0.4);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.14, t + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.5);
+}
+
+// ---- city ambience (distant traffic hum + faint wind, looped) ----
+// A looped noise bed through a lowpass, with a slow LFO on the filter so
+// the hum breathes. Starts with the game; quiet enough to sit under the
+// radio and engine.
+let ambNodes = null;
+export function ambienceStart() {
+  if (!ensure() || ambNodes) return;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(2); src.loop = true;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
+  const g = ctx.createGain(); g.gain.value = 0.02;
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
+  const lfoGain = ctx.createGain(); lfoGain.gain.value = 90;
+  lfo.connect(lfoGain).connect(f.frequency);
+  src.connect(f).connect(g).connect(master);
+  src.start(); lfo.start();
+  ambNodes = { src, lfo };
+}
+export function ambienceStop() {
+  if (!ambNodes) return;
+  try { ambNodes.src.stop(); ambNodes.lfo.stop(); } catch {}
+  ambNodes = null;
+}
+
 // ---- siren (square wave alternating 720 / 940 Hz) ----
 export function sirenStart() {
   if (!ensure() || sirenOsc) return;

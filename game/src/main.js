@@ -4,6 +4,7 @@
 // Written from scratch from the re-author spec.
 const THREE = globalThis.THREE;
 import { buildCity } from './city.js';
+import { zoneFor, STREETS } from './city-layout.js';
 import { buildCar, makeTraffic, makeParked, makePolice, setAirPitch } from './vehicles.js';
 import { buildJay, buildNadia, buildPerson, walkCycle, aimPose, buildRifle, makePedestrians } from './people.js';
 import * as HUD from './hud.js';
@@ -14,7 +15,7 @@ import { setupShot } from './shots.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const params = new URLSearchParams(location.search);
-const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, 4) : 0;
+const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, 16) : 0;
 window.__shotReady = false;
 window.__shot = SHOT;
 
@@ -125,9 +126,14 @@ function renderFrame() {
 
 // ---------- build the world ----------
 const cityRefs = buildCity(scene);
+// The city validation result (0 violations) — exposed for the HUD badge,
+// the shot harness, and the kit check.
+window.__cityValidation = cityRefs.cityValidation;
+window.__citySummary = cityRefs.citySummary;
+HUD.setCityBadge(cityRefs.cityBadge, cityRefs.cityValidation.passed);
 const traffic = makeTraffic(scene, 30);
-const parked = makeParked(scene, 18);
-const pedestrians = makePedestrians(scene, 60);
+const parked = makeParked(scene, cityRefs.layout.parking, 18);
+const pedestrians = makePedestrians(scene, 60, cityRefs.layout);
 pedestrians.setFleeing(false);
 const police = makePolice(scene);
 
@@ -198,6 +204,7 @@ const state = {
   driving: false,
   car: null, // the car the player is driving (playerCar or sedanCar)
   speed: 0, // m/s
+  nitro: 100, // 0-100: the boost bar (hold Shift while driving to burn it)
   steer: 0,
   wanted: 0,
   money: 250,
@@ -208,6 +215,42 @@ const state = {
   radio: 0,
   busted: false,
   time: 0,
+};
+// Live debug handle (read-only snapshot): lets a test harness — or the
+// player in the console — inspect the running game without touching it.
+// Used by the kit check and by the rebuild's gameplay test.
+window.__game = {
+  get state() { return state; },
+  get mode() { return state.mode; },
+  get missionStage() { return state.mission.stage; },
+  get missionDone() { return state.mission.done; },
+  get nitro() { return Math.round(state.nitro); },
+  get speedKmh() { return Math.round(Math.abs(state.speed) * 3.6); },
+  get driving() { return state.driving; },
+  get wanted() { return state.wanted; },
+  get money() { return state.money; },
+  get player() { return { x: +jay.group.position.x.toFixed(1), z: +jay.group.position.z.toFixed(1) }; },
+  get car() { return state.car ? { x: +state.car.group.position.x.toFixed(1), z: +state.car.group.position.z.toFixed(1) } : null; },
+  get district() { const el = document.getElementById('district'); return el ? el.textContent : null; },
+  get street() { const el = document.getElementById('street'); return el ? el.textContent : null; },
+  // Police distance (min of the two cruisers) + the evade timer, for the
+  // mission test: confirms the evade is actually accumulating.
+  get policeDist() {
+    if (!state.car) return null;
+    const t = state.car.group.position;
+    const d0 = police[0].group.position.distanceTo(t);
+    const d1 = police[1].group.position.distanceTo(t);
+    return +Math.min(d0, d1).toFixed(1);
+  },
+  get clearT() { return +(state._clearT || 0).toFixed(2); },
+  // Test/debug teleport: puts the driven car (or Jay on foot) at (x, z).
+  // Used by the rebuild's gameplay test to reach the mission marker
+  // without a 6-minute drive at headless SwiftShader frame rates.
+  teleport(x, z) {
+    const target = state.car ? state.car.group : jay.group;
+    target.position.x = x; target.position.z = z;
+    return { x, z };
+  },
 };
 const MISSION_MARKER = { x: 120, z: 0 }; // Sunset Plaza marker for stage 2
 let markerMesh = null;
@@ -306,7 +349,7 @@ window.addEventListener('resize', () => {
 // ---------- start screen ----------
 const startEl = document.getElementById('start');
 function startGame(continued) {
-  Audio.initAudio(); Audio.resumeAudio(); Audio.engineStart(); Audio.radioStart(0);
+  Audio.initAudio(); Audio.resumeAudio(); Audio.engineStart(); Audio.radioStart(0); Audio.ambienceStart();
   startEl.style.display = 'none';
   HUD.showHUD();
   state.mode = 'play';
@@ -432,7 +475,19 @@ function updatePlayer(dt) {
   const strafe = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
   if (state.driving && state.car) {
     const car = state.car;
-    const top = car.group.userData.spec.top / 3.6; // km/h -> m/s
+    // Nitro boost: hold Shift while driving (and moving forward). Burns
+    // the nitro bar — the bar the HUD already showed at 100% with no
+    // mechanic behind it — for x1.35 top speed. The bar refills slowly
+    // when not boosting, so it is a resource to spend, not a permanent
+    // buff. (Shift on foot is still sprint; see below.)
+    const boosting = (keys['ShiftLeft'] || keys['ShiftRight']) && state.nitro > 0.5 && fwd > 0;
+    if (boosting) {
+      state.nitro = Math.max(0, state.nitro - 28 * dt);
+      Audio.nitroBoost();
+    } else {
+      state.nitro = Math.min(100, state.nitro + 6 * dt);
+    }
+    const top = (car.group.userData.spec.top / 3.6) * (boosting ? 1.35 : 1);
     const accel = fwd > 0 ? 14 : fwd < 0 ? -20 : 0;
     state.speed += accel * dt;
     if (fwd === 0) state.speed = lerp(state.speed, 0, dt * 1.4);
@@ -454,7 +509,7 @@ function updatePlayer(dt) {
     car.group.userData.wheels[0].rotation.y = strafe * 0.32;
     car.group.userData.wheels[1].rotation.y = strafe * 0.32;
     Audio.engineSet(Math.abs(state.speed) * 3.6, true);
-    HUD.setVehicle({ speed: Math.round(Math.abs(state.speed) * 3.6) });
+    HUD.setVehicle({ speed: Math.round(Math.abs(state.speed) * 3.6), nitro: Math.round(state.nitro) });
     // mission: reached the marker?
     if (state.mission.stage === 1) {
       const d = Math.hypot(car.group.position.x - MISSION_MARKER.x, car.group.position.z - MISSION_MARKER.z);
@@ -604,6 +659,35 @@ function updateMinimap() {
 }
 
 // ---------- main loop ----------
+// Street names (the layout roads are keyed by axis:coord — axis 'x' is an
+// east-west street whose coordinate is its z, axis 'z' a north-south
+// street whose coordinate is its x).
+const STREET_NAMES = {
+  'x:0': 'Lantern Blvd', 'x:60': 'Palm Row', 'x:-60': 'Marina Way',
+  'x:120': 'Coral Ave', 'x:-120': 'Harbor Blvd', 'x:180': 'Crescent Ave',
+  'x:-180': 'Dockside Ave', 'x:240': 'Northgate Ave', 'x:-240': 'Southgate Ave',
+  'z:0': 'Sunset Ave', 'z:60': 'Vesper St', 'z:-60': 'Mirage St',
+  'z:120': 'Solana St', 'z:-120': 'Bayside St', 'z:180': 'Onyx St',
+  'z:-180': 'Topaz St', 'z:240': 'Eastgate Ave', 'z:-240': 'Westgate Ave',
+};
+// District + street from the player's actual position (zone from the
+// block they are in, street from the nearest road). Called with the
+// minimap tick; setDistrict only touches the DOM when a label changes.
+function updateDistrict() {
+  const p = state.driving && state.car ? state.car.group.position : jay.group.position;
+  const bx = Math.max(-4, Math.min(3, Math.floor(p.x / 60)));
+  const bz = Math.max(-4, Math.min(3, Math.floor(p.z / 60)));
+  const zone = zoneFor(bx, bz);
+  let best = null, bestD = 1e9;
+  for (const c of STREETS) {
+    const dEW = Math.abs(p.z - c);
+    const dNS = Math.abs(p.x - c);
+    if (dEW < bestD) { bestD = dEW; best = STREET_NAMES[`x:${c}`]; }
+    if (dNS < bestD) { bestD = dNS; best = STREET_NAMES[`z:${c}`]; }
+  }
+  HUD.setDistrict(zone, bestD < 14 ? best : 'San Amaro');
+}
+
 function animate() {
   const now = performance.now();
   const dt = Math.min((now - lastT) / 1000, 0.05);
@@ -632,7 +716,7 @@ function animate() {
     if (markerMesh.userData.beam) markerMesh.userData.beam.visible = markerMesh.visible;
     Audio.sirenUpdate(dt);
     minimapTimer += dt;
-    if (minimapTimer > 0.12) { minimapTimer = 0; updateMinimap(); }
+    if (minimapTimer > 0.12) { minimapTimer = 0; updateMinimap(); updateDistrict(); }
   }
   if (!SHOT) updateCamera(dt);
   renderFrame();

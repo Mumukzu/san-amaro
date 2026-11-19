@@ -1,7 +1,14 @@
 // SAN AMARO — vehicles. Low-poly cars built from boxes + cylinders, all
 // procedural. Arcade driving, traffic that loops the street grid, and SAMPD
 // pursuit units. Written from scratch from the re-author spec.
+//
+// Traffic density follows the street hierarchy (from ./city-layout.js):
+// the main avenues carry 3x the traffic of a residential street, secondary
+// streets 2x. Parked cars sit in the layout's parking bays (the road's
+// outer lane) — never on the sidewalk, which is where the old fixed
+// ±8.6 m offset put them.
 const THREE = globalThis.THREE;
+import { STREETS, streetClass } from './city-layout.js';
 
 function mat(color, rough = 0.35, metal = 0.55, extra = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
@@ -23,6 +30,8 @@ const SPECS = {
   truck:    { name: 'Longhaul',     kind: 'Truck',   top: 33, color: 0xc96a2e, wing: false, led: false },
   police:   { name: 'Interceptor',  kind: 'Police',  top: 50, color: 0xf2f2f2, wing: false, led: false, police: true },
   lowrider: { name: 'Flamingo',     kind: 'Lowrider',top: 39, color: 0xff6fb5, wing: false, led: true },
+  taxi:     { name: 'Sunset Cab',   kind: 'Taxi',    top: 44, color: 0xffc21a, wing: false, led: false, taxi: true },
+  pickup:   { name: 'Ranchero',     kind: 'Pickup',  top: 43, color: 0x2e7a4a, wing: false, led: false, pickup: true },
 };
 
 function wheel(r = 0.34, w = 0.24) {
@@ -42,8 +51,8 @@ export function buildCar(type) {
   const spec = SPECS[type] || SPECS.sedan;
   const g = new THREE.Group();
   const paint = mat(spec.color, 0.3, 0.6, { envMapIntensity: 1.2 });
-  const isVan = type === 'van', isTruck = type === 'truck';
-  const L = isTruck ? 5.6 : isVan ? 4.8 : 4.4;
+  const isVan = type === 'van', isTruck = type === 'truck', isPickup = type === 'pickup';
+  const L = isTruck ? 5.6 : isVan ? 4.8 : isPickup ? 4.8 : 4.4;
   const W = isTruck || isVan ? 2.1 : 1.9;
 
   // main body (lower slab)
@@ -64,6 +73,24 @@ export function buildCar(type) {
     shield.position.set(0, 1.55, L * 0.28 + 0.82); g.add(shield);
     const bar = new THREE.Mesh(new THREE.BoxGeometry(W + 0.2, 0.5, 0.3), CHROME);
     bar.position.set(0, 0.6, L / 2 + 0.1); g.add(bar);
+  } else if (isPickup) {
+    // Pickup: a cab on the front half + an open bed on the rear half
+    // (low walls, a crate and a spare tyre as cargo).
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(W - 0.3, 0.6, L * 0.36), GLASS);
+    cab.position.set(0, 1.05, L * 0.28); g.add(cab);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(W - 0.25, 0.1, L * 0.34), paint);
+    roof.position.set(0, 1.38, L * 0.28); g.add(roof);
+    const bedY = 1.11; // walls sit on the body top (0.86) and rise 0.5
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(W, 0.5, 0.12), paint);
+    tail.position.set(0, bedY, -L / 2 + 0.06); g.add(tail);
+    for (const sx of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, L * 0.45), paint);
+      wall.position.set(sx * (W / 2 - 0.06), bedY, -L * 0.25); g.add(wall);
+    }
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.7), mat(0x8a6a3a, 0.8, 0.1));
+    crate.position.set(-0.3, 1.11, -L * 0.25); g.add(crate);
+    const spare = wheel(0.34, 0.2);
+    spare.position.set(0.45, 1.05, -L * 0.3); spare.rotation.x = Math.PI / 2; g.add(spare);
   } else {
     const cab = new THREE.Mesh(new THREE.BoxGeometry(W - 0.35, 0.55, L * 0.48), GLASS);
     cab.position.set(0, 1.05, -L * 0.06); g.add(cab);
@@ -74,6 +101,14 @@ export function buildCar(type) {
       const scoop = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 1.0), mat(0x111116, 0.4, 0.6));
       scoop.position.set(0, 0.95, L * 0.22); g.add(scoop);
     }
+  }
+  // Taxi: a lit roof sign + a dark band on the flanks.
+  if (spec.taxi) {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.22, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xffc21a, emissiveIntensity: 1.4 }));
+    sign.position.set(0, 1.52, -L * 0.06); g.add(sign);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(W + 0.02, 0.18, L * 0.5), mat(0x111111, 0.5, 0.4));
+    band.position.set(0, 0.72, -L * 0.06); g.add(band);
   }
   // chrome trim strip
   const trim = new THREE.Mesh(new THREE.BoxGeometry(W + 0.02, 0.08, L * 0.96), CHROME);
@@ -144,9 +179,15 @@ export function setAirPitch(car, pitch, lift) {
 // ---- traffic: cars looping the street grid ----
 export function makeTraffic(scene, count = 30) {
   const cars = [];
-  const types = ['sedan', 'sedan', 'muscle', 'van', 'truck', 'lowrider', 'sedan'];
-  const streetsZ = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
-  const streetsX = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
+  const types = ['sedan', 'sedan', 'muscle', 'van', 'truck', 'lowrider', 'sedan', 'taxi', 'pickup'];
+  // Weighted street lists: a main avenue appears 3x, a secondary street
+  // 2x, a residential street 1x — so traffic concentrates on the avenues.
+  const streetsZ = [];
+  const streetsX = [];
+  for (const c of STREETS) {
+    const w = streetClass(c) === 'main' ? 3 : streetClass(c) === 'secondary' ? 2 : 1;
+    for (let k = 0; k < w; k++) { streetsZ.push(c); streetsX.push(c); }
+  }
   for (let i = 0; i < count; i++) {
     const type = types[i % types.length];
     const { group } = buildCar(type);
@@ -183,9 +224,27 @@ export function makeTraffic(scene, count = 30) {
 }
 
 // ---- parked cars along curbs ----
-export function makeParked(scene, count = 18) {
+// Parked cars sit in the layout's parking bays (the road's outer lane on
+// main/secondary streets). `bays` is layout.parking from buildCity. The
+// fallback (no bays) uses the outer lane of a secondary street (4.8 m),
+// not the old 8.6 m that put cars on the sidewalk.
+export function makeParked(scene, bays = null, count = 18) {
   const spots = [];
-  const types = ['sedan', 'muscle', 'van', 'lowrider', 'sedan'];
+  const types = ['sedan', 'muscle', 'van', 'lowrider', 'sedan', 'taxi', 'pickup'];
+  if (bays && bays.length) {
+    // Spread the cars across the bays (stride, so they are not clustered).
+    const stride = Math.max(1, Math.floor(bays.length / count));
+    for (let i = 0, n = 0; i < bays.length && n < count; i += stride, n++) {
+      const bay = bays[i];
+      const type = types[n % types.length];
+      const { group } = buildCar(type);
+      group.position.set(bay.x, 0, bay.z);
+      group.rotation.y = bay.rot;
+      scene.add(group);
+      spots.push(group);
+    }
+    return spots;
+  }
   for (let i = 0; i < count; i++) {
     const type = types[i % types.length];
     const { group } = buildCar(type);
@@ -195,10 +254,10 @@ export function makeParked(scene, count = 18) {
     const pos = -230 + ((i * 53) % 460);
     const side = (i % 2 === 0) ? 1 : -1;
     if (alongZ) {
-      group.position.set(pos, 0, s + side * 8.6);
+      group.position.set(pos, 0, s + side * 4.8);
       group.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
     } else {
-      group.position.set(s + side * 8.6, 0, pos);
+      group.position.set(s + side * 4.8, 0, pos);
       group.rotation.y = side > 0 ? Math.PI : 0;
     }
     scene.add(group);

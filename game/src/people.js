@@ -2,7 +2,11 @@
 // FACE: white eyes with dark pupils, eyebrows, a nose, a mouth, and a hair
 // cap, readable at gameplay distance. Faces are built from the character's
 // own meshes (no extra textures). Written from scratch from the spec.
+//
+// Pedestrians walk the layout's pedestrian paths (see ./city-layout.js):
+// the inner sidewalk band, with crowds weighted by street class.
 const THREE = globalThis.THREE;
+import { STREETS, streetClass, roadHalfWidth } from './city-layout.js';
 
 function mat(color, rough = 0.75, metal = 0.0) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
@@ -182,14 +186,29 @@ export function walkCycle(person, phase, speed, running) {
 }
 
 // ---- pedestrians ----
-export function makePedestrians(scene, count = 60) {
+// Pedestrians walk the inner sidewalk band (the pedestrian path) of the
+// layout's streets, with crowds weighted by street class — the main
+// avenues carry 3x the foot traffic of a residential street — so the
+// busy parts of the city feel busy and the quiet parts feel quiet.
+// `layout` is accepted for future zone-based placement; the street list
+// and path offset already come from the layout module.
+export function makePedestrians(scene, count = 60, layout = null) {
   const walkers = [];
-  const sidewalksZ = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
+  const streets = [];
+  for (const c of STREETS) {
+    const w = streetClass(c) === 'main' ? 3 : streetClass(c) === 'secondary' ? 2 : 1;
+    for (let k = 0; k < w; k++) streets.push(c);
+  }
   for (let i = 0; i < count; i++) {
     const p = buildPerson({});
     const alongZ = i % 2 === 0;
-    const street = sidewalksZ[i % sidewalksZ.length];
-    const side = (i % 3 === 0) ? 8.2 : -8.2;
+    const street = streets[i % streets.length];
+    // Walk on the pedestrian path: the inner sidewalk band, whose centre
+    // is roadHalf + 1.0 m from the street centre. (The old fixed 8.2 m
+    // put walkers at the outer edge — in the planting strip, next to the
+    // trees — on the narrower residential streets.)
+    const half = roadHalfWidth(streetClass(street));
+    const side = (i % 3 === 0) ? half + 1.0 : -(half + 1.0);
     const pos = -270 + ((i * 41) % 540);
     const dir = (i % 4 < 2) ? 1 : -1;
     if (alongZ) {
