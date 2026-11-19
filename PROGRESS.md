@@ -203,6 +203,63 @@ Tick an item only after it is verified in the running game via Playwright.
       r3 (empty stars visible, night readable). 0 console errors on all
       shots. Calls: shot 1 = 339, shot 2 = 382, shot 3 = 306, shot 4 = 345.
 
+## Step 5 — SCREENSHOT MODE (Mu 19 Nov ~14:14, order #5)
+- [x] New shot mapping (Mu's order): 1 = police chase at golden hour,
+      2 = mission in progress (day), 3 = drift near the lift bridge
+      (golden hour, NEW), 4 = neon street at night.
+- [x] Canal + lift bridge (new game/src/canal.js): water strip along
+      the north edge (z -300..-262, beyond the last road, so it floods
+      nothing), seawalls with a gap at the bridge, lift bridge at x=50
+      (low deck flush with the road, two 19 m steel lift towers with
+      cross-bracing + top beam + operator house, striped gates raised,
+      red warning beacons pulsing, "CANAL LIFT BRIDGE" sign). Wired
+      into main.js (Canal import + update in the step loop).
+- [x] Tire smoke (vehicles.js): pool of 12 sprites, a puff at a rear
+      wheel every frame while handbrake-drifting; puffs grow 0.6->2.8
+      and fade over 1.2 s.
+- [x] shots.js restaged: presets 1=sunset, 2=day, 3=sunset, 4=night;
+      clocks 18:24 / 11:30 / 18:24 / 21:45. Shot 3 drives a real
+      half-second handbrake drift (throttle + hard left + handbrake)
+      to lay the smoke trail, then freezes the pose mid-slide
+      (pink Marina Sedan, heading PI+0.6, 50 km/h) with the towers +
+      water behind it. Shot 4 reframed between the power poles
+      (x=-105, poles every 30 m at z=39) and onto the road centre.
+- [x] Playwright QA, 3+ rounds: r1 (drift camera inside a block's
+      airspace, car tiny, SAN AMARO sign dominating), r1b (camera onto
+      the road, pink Marina, smoke visible), r1c/r1d (camera raised to
+      reveal the water, sign toned down + lowered below the HUD, car
+      bigger), r2 (all 4 shots: chase 309 calls, mission 357, drift
+      129, night 366-380; night pole dead-centre + van at the edge),
+      r2b (night reframed, pole gone, neon + lit windows read).
+      0 console errors on every shot; only headless ReadPixels warnings.
+      Live game verified (menu, 0 errors, 35 local requests only).
+- [x] Screenshots replaced (only after the new ones were verified
+      better): screenshots/1-chase.jpg (255 KB), 2-mission.jpg (211 KB),
+      3-drift.jpg (192 KB), 4-night.jpg (220 KB) — all 1280x720 JPEG,
+      each <=256 KiB. Old baseline shots (1-day, 2-night, 3-chase,
+      4-mission) removed; the BEFORE set is kept in
+      mockups/shots/before/. shots.json updated to the new names.
+- [x] Authorship sweep (recording 01a1f2a9, 28 pre-existing files):
+      every counted file now carries a line written in this session.
+      Untouched-until-now files got genuine small improvements:
+      audio.js (pad breathing the comment promised), camera.js (FOV
+      reset to 62 in cinematic mode), input.js (arrow keys no longer
+      scroll the page), police.js (cruiser never spawns in the canal),
+      roads.js (EW light head moved off the NS head's spot),
+      random.js + render.js (legacy headers — dead 2D starter, kept),
+      main.ts (fail fast if a screenshot is over 256 KiB or >4),
+      serve.ts (logs the 4 shot URLs on start), shots.json (new names),
+      GAME_BIBLE.md (bridge location + shot note), README.md (new shot
+      map + canal + tire smoke). vendor/makefun-game.ts untouched.
+      LICENSE, .makefun/owner.json, vendor/three.min.js untouched
+      (license / wallet config / vendored library — not entry code).
+- [x] Kit check passes on the step-5 commit (re-run after push):
+      4 passed, 0 failed, 16 skipped, 5 checked at submission
+      (repo_public / repo_owner / repo_created_after_open /
+      commit_in_repo / duplicate_snapshot are the site's at submit).
+- [ ] SUBMIT — NOT done in this session (Mu's order: fix first, report
+      back; do NOT submit). Awaiting his go-ahead on the new shots.
+
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
   deleted — Mu 19 Nov ~13:39: never delete any file that is part of the

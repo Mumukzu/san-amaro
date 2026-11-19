@@ -69,6 +69,10 @@ export class AudioSys {
       this.engineGain.gain.setTargetAtTime(driving ? 0.05 + speed * 0.0022 : 0, t, 0.1);
       this.engineOsc.frequency.setTargetAtTime(52 + speed * 3.4, t, 0.1);
       this.engineFilter.frequency.setTargetAtTime(320 + speed * 22, t, 0.1);
+      // The pad breathes: a slow sine swells its gain so the city hum
+      // never sits dead-flat under the engine and the siren.
+      const breathe = 0.045 + 0.02 * Math.sin(state.time * 0.5);
+      this.padGain.gain.setTargetAtTime(breathe, t, 0.4);
       const siren = state.wanted > 0 && state.phase === 'playing';
       this.sirenGain.gain.setTargetAtTime(siren ? 0.035 : 0, t, 0.2);
       if (siren) {

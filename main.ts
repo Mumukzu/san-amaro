@@ -15,13 +15,25 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
+// Fail fast on a bad screenshot set: the gate refuses more than 4 shots or
+// any shot over 256 KiB, and a silent copy would only surface at submit.
+const shotDir = join(here, 'screenshots');
+if (existsSync(shotDir)) {
+  const shots = readdirSync(shotDir).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort();
+  if (shots.length > 4) throw new Error(`screenshots/: ${shots.length} shots, max 4`);
+  for (const f of shots) {
+    const size = statSync(join(shotDir, f)).size;
+    if (size > 262144) throw new Error(`screenshots/${f}: ${size} bytes, max 262144`);
+  }
+}
 
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });

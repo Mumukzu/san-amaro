@@ -64,8 +64,10 @@ export class TrafficLights {
       ns.group.rotation.y = Math.PI; // face north (toward southbound traffic)
       scene.add(ns.group);
       this.heads.push({ lamps: ns.lamps, axis: 'ns' });
+      // The EW head sits on the opposite corner, not on top of the NS
+      // head: two heads at the same spot interpenetrate.
       const ew = makeHead(mats);
-      ew.group.position.set(inter.x + 9, 0, inter.z + 9);
+      ew.group.position.set(inter.x - 9, 0, inter.z + 9);
       ew.group.rotation.y = -Math.PI / 2; // face east
       ew.group.position.y = 0;
       scene.add(ew.group);

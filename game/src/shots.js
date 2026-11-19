@@ -61,41 +61,20 @@ export function stageShot(n, game) {
   const { sky, player, vehicles, camera, hud, police } = game;
   state.shot = String(n);
   state.phase = 'playing';
-  // Keep the HUD clock honest: the preset applied below is the time of day.
-  state.timePreset = ({ '1': 'day', '2': 'night', '3': 'sunset', '4': 'day' })[n] || 'sunset';
+  // Mu's four moments (19 Nov ~14:14): 1 chase at golden hour, 2 mission
+  // in progress, 3 drift near the lift bridge, 4 neon street at night.
+  // Each shows a different feature set, each with the full HUD.
+  state.timePreset = ({ '1': 'sunset', '2': 'day', '3': 'sunset', '4': 'night' })[n] || 'sunset';
   // The in-game clock matches the preset (day 11:30, sunset 18:24, night 21:45).
-  state.clockMinutes = { '1': 11 * 60 + 30, '2': 21 * 60 + 45, '3': 18 * 60 + 24, '4': 11 * 60 + 30 }[n] || 18 * 60 + 24;
+  state.clockMinutes = { '1': 18 * 60 + 24, '2': 11 * 60 + 30, '3': 18 * 60 + 24, '4': 21 * 60 + 45 }[n] || 18 * 60 + 24;
   state.day = 1;
   hud.hideMenus();
   sky.applyPreset('sunset', true);
   game.applyGlow();
 
   if (n === '1') {
-    // Daytime open-world view: on foot on the boulevard, towers ahead.
-    sky.applyPreset('day', true);
-    game.applyGlow();
-    player.pos.set(0, 0, 20);
-    player.heading = Math.PI; // face north, toward the plaza and towers
-    player.group.position.copy(player.pos);
-    player.group.rotation.y = player.heading;
-    camera.setCinematic(new THREE.Vector3(0, 26, 62), new THREE.Vector3(0, 12, -160));
-    setObjective('Explore San Amaro');
-    simulate(game, 4);
-    syncMission(1, 0.12);
-  } else if (n === '2') {
-    // Night neon street: low street-level view down the boulevard.
-    sky.applyPreset('night', true);
-    game.applyGlow();
-    player.pos.set(-128, 0, 42);
-    player.heading = Math.PI / 2; // face east, down the boulevard
-    player.group.position.copy(player.pos);
-    player.group.rotation.y = player.heading;
-    camera.setCinematic(new THREE.Vector3(-118, 2.4, 44), new THREE.Vector3(-30, 4, 50));
-    setObjective('Explore San Amaro');
-    simulate(game, 4);
-    syncMission(1, 0.1);
-  } else if (n === '3') {
-    // Police chase at sunset: player driving east, cruiser behind, 2 stars.
+    // 1 — Police chase at golden hour: player driving east, cruiser
+    // behind, 2 stars. The chase reads: palm crowns, lamp pools, neon.
     sky.applyPreset('sunset', true);
     game.applyGlow();
     const car = vehicles.cars.find((c) => c.parked && Math.abs(c.pos.x - 20) < 1 && Math.abs(c.pos.z - 38.5) < 1)
@@ -121,8 +100,9 @@ export function stageShot(n, game) {
     police.cruiser.car.heading = Math.PI / 2;
     game.vehicles.updateVisuals(0.016); // sync the cruiser mesh to its new pos
     camera.setCinematic(new THREE.Vector3(car.pos.x - 22, 16, car.pos.z - 20), new THREE.Vector3(car.pos.x + 4, 2, car.pos.z));
-  } else {
-    // Mission HUD + minimap: driving to a marker in daylight.
+  } else if (n === '2') {
+    // 2 — Mission in progress: driving to the marker in daylight, the
+    // pink Marina Sedan on the boulevard, plaza and towers ahead.
     sky.applyPreset('day', true);
     game.applyGlow();
     const car = vehicles.cars.find((c) => c.parked && Math.abs(c.pos.x + 40) < 1 && Math.abs(c.pos.z - 38.5) < 1)
@@ -138,6 +118,64 @@ export function stageShot(n, game) {
     // Mission framing: diagonal high view across the boulevard toward the
     // plaza and towers, the driven car on-axis in the lower centre.
     camera.setCinematic(new THREE.Vector3(car.pos.x - 30, 18, car.pos.z + 26), new THREE.Vector3(car.pos.x + 30, 4, car.pos.z - 20));
+  } else if (n === '3') {
+    // 3 — Drift near the lift bridge: the car slides sideways on the
+    // x=50 approach road, tire smoke at the rear wheels, the lift towers
+    // and canal water behind it at golden hour.
+    sky.applyPreset('sunset', true);
+    game.applyGlow();
+    // The pink Marina Sedan (the player's car) — the hero car, not a
+    // random traffic colour.
+    const car = vehicles.cars.find((c) => c.parked && Math.abs(c.pos.x + 40) < 1 && Math.abs(c.pos.z - 38.5) < 1)
+      || vehicles.cars.find((c) => c.parked);
+    car.pos.set(50, 0, -228);
+    car.heading = Math.PI; // north, toward the bridge
+    enterCarForShot(game, car, 18);
+    setObjective('Drift the bridge approach');
+    state.marker = { x: 150, z: 50 };
+    state.markerLabel = 'Drop-off';
+    state.missionStartDist = 190;
+    // The drift: full throttle + hard left + handbrake for half a second.
+    // drive() sets car.drifting, and updateVisuals puffs smoke at the
+    // rear wheels while it lasts. The final pose is frozen explicitly
+    // (the loop is only there to lay the smoke trail).
+    for (let i = 0; i < 30; i += 1) {
+      game.vehicles.drive(car, STEP, 1, -0.6, false, true);
+      state.speed = car.speed;
+      state.time += STEP;
+      state.clockMinutes += STEP * 0.5;
+      state.missionTime += STEP;
+      game.vehicles.updateVisuals(STEP);
+    }
+    // Freeze the pose mid-slide: on the approach road, angled ~35° to it,
+    // still fast. The smoke trail sits behind the rear wheels.
+    car.pos.set(50, 0, -238);
+    car.heading = Math.PI + 0.6;
+    car.speed = 14;
+    state.speed = 14;
+    game.vehicles.updateVisuals(0.016);
+    syncMission(3, 0.72);
+    document.getElementById('hud-mission-hint').textContent = 'Handbrake through the turn — smoke the rears.';
+    // Higher, further back: the canal water reads (a low angle hides it
+    // behind the deck), the towers + sign clear the topmid HUD, and the
+    // SAN AMARO sign drops to the frame edge instead of the centre.
+    camera.setCinematic(new THREE.Vector3(50, 6, -215), new THREE.Vector3(50, 1, -255));
+  } else {
+    // 4 — Neon street at night: low street-level view down the boulevard,
+    // lit windows, lamp pools, neon signs. The camera sits BETWEEN two
+    // power poles (x=-105, poles are every 30 m at z=39) and on the road
+    // centre, so no pole lands dead-centre and no block wall crowds the
+    // left edge.
+    sky.applyPreset('night', true);
+    game.applyGlow();
+    player.pos.set(-128, 0, 42);
+    player.heading = Math.PI / 2; // face east, down the boulevard
+    player.group.position.copy(player.pos);
+    player.group.rotation.y = player.heading;
+    camera.setCinematic(new THREE.Vector3(-105, 4.5, 44), new THREE.Vector3(0, 2.5, 52));
+    setObjective('Explore San Amaro');
+    simulate(game, 4);
+    syncMission(1, 0.1);
   }
   game.camera.update(0.016, game.focusPos(), game.focusHeading(), state.speed);
 }

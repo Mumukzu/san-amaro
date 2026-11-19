@@ -36,6 +36,9 @@ export class Police {
     let best = null; let bestD = 1e9;
     for (const r of roads) {
       for (const along of [-260, 260]) {
+        // Skip the canal ring: along = -260 as a z is water and seawall,
+        // not a road — a cruiser must never spawn in it.
+        if (along < -250) continue;
         const d = Math.hypot(r - pos.x, along - pos.z);
         if (d > 45 && d < bestD) { bestD = d; best = { x: r, z: along }; }
         const d2 = Math.hypot(along - pos.x, r - pos.z);

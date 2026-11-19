@@ -43,9 +43,12 @@ Open http://localhost:8080 — click **Continue** (or press Enter).
 - **Explorable city** — Downtown Core slice (~600×600 m) of San Amaro:
   glass towers, strip malls, dingbat apartments, plaza + fountain, palms,
   murals, billboards, traffic lights, day/night cycle, fog, shadows.
+  North edge: the canal and the Canal Lift Bridge (twin steel towers,
+  deck, gates, lit sign).
 - **Steal and drive cars** — parked sedans ready to steal; arcade handling
-  (steering, drift, brake, handbrake, nitro), damage feedback (condition),
-  rotating/steering wheels, headlights and brake lights.
+  (steering, drift, brake, handbrake, nitro), tire smoke while drifting,
+  damage feedback (condition), rotating/steering wheels, headlights and
+  brake lights.
 - **Traffic and pedestrians** — AI cars on loops, stopping at red lights and
   behind the car ahead; pedestrians walking the sidewalks, fleeing a pursuit.
 - **Wanted level and police** — stealing a car or hitting a pedestrian raises
@@ -82,9 +85,10 @@ Open http://localhost:8080 — click **Continue** (or press Enter).
 
 ## Screenshots
 
-`?shot=1` daytime open-world view · `?shot=2` night neon street ·
-`?shot=3` police chase at sunset · `?shot=4` mission HUD + minimap.
-Real renders live in `screenshots/`.
+`?shot=1` police chase at golden hour · `?shot=2` mission in progress (day) ·
+`?shot=3` drift near the lift bridge (golden hour) · `?shot=4` neon street at
+night. Real renders live in `screenshots/` (`1-chase.jpg`, `2-mission.jpg`,
+`3-drift.jpg`, `4-night.jpg`; the first by name is the cover).
 
 ## License
 

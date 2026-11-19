@@ -327,14 +327,14 @@ export function buildProps(scene) {
   {
     const tex = canvasTexture(1024, 160, (ctx) => {
       ctx.clearRect(0, 0, 1024, 160);
-      ctx.fillStyle = '#f4f1e8';
+      ctx.fillStyle = '#d8d0bc';
       ctx.font = '900 118px system-ui, sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('SAN AMARO', 512, 84);
     });
     const mat = new THREE.MeshStandardMaterial({
       map: tex, transparent: true, emissive: 0xffffff, emissiveMap: tex,
-      emissiveIntensity: 0.15, roughness: 0.6, metalness: 0, side: THREE.DoubleSide,
+      emissiveIntensity: 0.05, roughness: 0.6, metalness: 0, side: THREE.DoubleSide,
     });
     glowMats.push(mat);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(56, 8.75), mat);

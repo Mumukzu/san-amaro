@@ -2,6 +2,8 @@
 // is scaled to fit the window and centred, the margin filled with the backdrop colour. Flat
 // rectangles and circles, canvas text for the HUD and the panels. Text that holds a number is
 // rebuilt only when the number changes, so a frame allocates nothing.
+// LEGACY — the 2D "Block Dodger" starter renderer. The game is Three.js now (main.js +
+// the 3D modules); nothing imports this file. Kept in place (no deletes in this repo).
 import { FIELD, FONT, LIVES, PALETTE } from './config.js';
 import { KIND_COIN } from './world.js';
 

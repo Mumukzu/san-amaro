@@ -25,6 +25,7 @@ import { AudioSys } from './audio.js';
 import { createInput } from './input.js';
 import { stageShot } from './shots.js';
 import { PostFX } from './postfx.js';
+import { Canal } from './canal.js';
 
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
@@ -68,6 +69,7 @@ const sky = new Sky(scene, renderer);
 const layout = buildWorld(scene);
 const buildings = buildBuildings(scene, layout);
 const props = buildProps(scene);
+const canal = new Canal(scene);
 state.colliders = [...buildings.colliders, ...props.colliders];
 const lights = new TrafficLights(scene);
 const vehicles = new Vehicles(scene);
@@ -96,7 +98,7 @@ sky.applyPreset(state.timePreset || DEFAULT_TIME, true);
 applyGlow();
 
 const game = {
-  sky, player, vehicles, camera, hud, police, lights, traffic, peds,
+  sky, player, vehicles, camera, hud, police, lights, traffic, peds, canal,
   lightIntersections: LIGHT_INTERSECTIONS,
   applyGlow, scene, renderer,
   focusPos() {
@@ -390,6 +392,7 @@ function step(dt) {
   lights.update(dt);
   traffic.update(dt, LIGHT_INTERSECTIONS);
   peds.update(dt);
+  canal.update();
   if (state.wanted > 0) police.update(dt, bustGame);
   vehicles.updateVisuals(dt);
   updateMission(dt);

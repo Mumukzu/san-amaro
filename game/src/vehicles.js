@@ -4,7 +4,7 @@
 // so 18+ cars cost only a few draw calls. All cars are original designs.
 import * as THREE from 'three';
 import { CAR, PARKED_COUNT } from './config.js';
-import { angleLerp, circleVsAABB, clamp, mergeColored, mergeGeoms, mulberry32, pick, rand } from './utils.js';
+import { angleLerp, canvasTexture, circleVsAABB, clamp, mergeColored, mergeGeoms, mulberry32, pick, rand } from './utils.js';
 import { state } from './state.js';
 
 const SEDAN_COLORS = [0xc23a2a, 0x2a6ac2, 0xe8b832, 0x3a3f45, 0x2a7a4a, 0xd8d4c8, 0xff7a1a, 0x7a3ab0];
@@ -156,6 +156,29 @@ export class Vehicles {
     this.tailMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(60 * 3), 3);
     scene.add(this.tailMesh);
     this.wheelSpin = new Map(); // carId -> spin angle
+    // Tire smoke: a small pool of soft sprites, spawned at the rear wheels
+    // while a car handbrakes at speed (the drift shot lives on this).
+    // Each puff grows and fades over ~1.2 s; the pool recycles.
+    const smokeTex = canvasTexture(64, 64, (ctx, w, h) => {
+      const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+      g.addColorStop(0, 'rgba(220,220,220,0.85)');
+      g.addColorStop(0.6, 'rgba(200,200,200,0.35)');
+      g.addColorStop(1, 'rgba(200,200,200,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    });
+    this.smokePool = [];
+    for (let i = 0; i < 12; i += 1) {
+      const mat = new THREE.SpriteMaterial({
+        map: smokeTex, transparent: true, opacity: 0, depthWrite: false,
+      });
+      const spr = new THREE.Sprite(mat);
+      spr.visible = false;
+      spr.scale.setScalar(0.5);
+      scene.add(spr);
+      this.smokePool.push({ spr, age: 1e9 });
+    }
+    this.smokeIdx = 0;
   }
 
   bodyMat(color) {
@@ -296,6 +319,8 @@ export class Vehicles {
     car.speed -= car.speed * CAR.drag * dt;
     car.speed = clamp(car.speed, -CAR.maxReverse, CAR.maxSpeed);
     if (Math.abs(car.speed) < 0.05 && throttle === 0) car.speed = 0;
+    // Drifting: handbrake at speed — the rear wheels smoke (see updateVisuals).
+    car.drifting = handbrake && Math.abs(car.speed) > 5;
     // Steering: stronger at low speed, reversed when reversing.
     const steerTarget = steerInput * CAR.steerMax * clamp(1 - Math.abs(car.speed) / 40, 0.35, 1);
     car.steer += (steerTarget - car.steer) * Math.min(1, CAR.steerSpeed * 3 * dt);
@@ -394,6 +419,28 @@ export class Vehicles {
         car.barR.visible = on;
         car.barB.visible = !on;
       }
+      // Tire smoke while drifting: a puff at a rear wheel each frame.
+      if (car.drifting) {
+        const slot = this.smokePool[this.smokeIdx % this.smokePool.length];
+        this.smokeIdx += 1;
+        const rear = car.wheelPos[2 + (this.smokeIdx % 2)];
+        const wx = car.pos.x + Math.cos(car.heading) * rear[0] + Math.sin(car.heading) * rear[2];
+        const wz = car.pos.z - Math.sin(car.heading) * rear[0] + Math.cos(car.heading) * rear[2];
+        slot.spr.position.set(wx, 0.5, wz);
+        slot.spr.scale.setScalar(0.8);
+        slot.spr.material.opacity = 0.6;
+        slot.spr.visible = true;
+        slot.age = 0;
+      }
+    }
+    // Age the smoke: grow + fade, hide when spent.
+    for (const slot of this.smokePool) {
+      if (!slot.spr.visible) continue;
+      slot.age += dt;
+      const t = slot.age / 1.2;
+      if (t >= 1) { slot.spr.visible = false; continue; }
+      slot.spr.scale.setScalar(0.6 + t * 2.2);
+      slot.spr.material.opacity = 0.5 * (1 - t);
     }
     this.wheelMesh.instanceMatrix.needsUpdate = true;
     this.hubMesh.instanceMatrix.needsUpdate = true;

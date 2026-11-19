@@ -26,6 +26,7 @@ export function createInput(canvas) {
     else if (event.code === 'KeyP' || event.code === 'Escape') pressed.add('pause');
     else if (event.code === 'Enter' || event.code === 'Space') pressed.add('confirm');
     if (event.code === 'Space') event.preventDefault(); // page must not scroll
+    if (event.code.startsWith('Arrow')) event.preventDefault(); // arrows drive, they must not scroll either
   });
   window.addEventListener('keyup', (event) => {
     keys[event.code] = false;

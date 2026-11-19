@@ -69,4 +69,5 @@ createServer((request, response) => {
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
+  console.log(`staged shots: http://localhost:${port}/?shot=1 (chase, sunset) · ?shot=2 (mission, day) · ?shot=3 (drift, lift bridge) · ?shot=4 (neon street, night)`);
 });

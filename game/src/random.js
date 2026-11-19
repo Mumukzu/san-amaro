@@ -1,5 +1,7 @@
 // A small seeded random number generator (mulberry32): the same seed gives the same game,
 // which is what makes the screenshot scenes repeatable.
+// LEGACY — nothing imports this file. The live code uses mulberry32/rand from utils.js.
+// Kept in place (no deletes in this repo); do not wire it back in without a reason.
 
 export function createRandom(seed) {
   let a = seed | 0;

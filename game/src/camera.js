@@ -25,6 +25,10 @@ export class Camera {
     this.mode = 'cinematic';
     this.cinePos.copy(pos);
     this.cineTarget.copy(target);
+    // Staged shots are framed at the base FOV: the drive camera widens it
+    // with speed, and a wide FOV would carry over into the next shot.
+    this.camera.fov = 62;
+    this.camera.updateProjectionMatrix();
   }
 
   update(dt, focusPos, focusHeading, speed) {

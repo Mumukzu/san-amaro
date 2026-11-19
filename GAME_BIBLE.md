@@ -337,7 +337,10 @@ List 10+ made-up brand names with slogans and colors. No real brands.
    driving grip, visibility, and the whole look of the city.
 3. **The Canal Lift Bridge stunt escape.** A signature set-piece: a
    3-star chase that ends in jumping a raised bridge. One moment, built
-   to be screenshotted.
+   to be screenshotted. The bridge itself stands at the north edge of
+   the Downtown slice (x=50, over the canal): two steel lift towers,
+   a low deck, striped gates and a lit sign — the drift approach to it
+   is one of the four staged screenshots.
 4. **Garage car customization.** At Palm & Piston, rebuild your ride —
    paint, wheels, body kits, spoilers, and performance tuning that
    changes how the car drives. Your car, your signature.
