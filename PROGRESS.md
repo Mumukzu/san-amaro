@@ -45,11 +45,20 @@ Tick an item only after it is verified in the running game via Playwright.
 - [ ] 30+ FPS on real hardware — NOT verifiable headless (SwiftShader ~1 FPS;
       fixed-step loop clamps to 0.25 s/frame, so the game slows down instead
       of breaking). Draw calls 127-171 (budget ≤250), tris 22-26K (budget ≤1.5M).
-- [ ] 4 real screenshots in screenshots/ (each a different feature)
-      — capture running (JPEG q80: 1-day, 2-night, 3-chase, 4-mission).
-- [ ] Kit check passes (`check --kit . --repo <repo>`)
-- [ ] Commit + push baseline; verify live quota; SUBMIT (Mu authorized 13:39:
-      submit the baseline directly once it runs + passes kit check)
+- [x] 4 real screenshots in screenshots/ (each a different feature)
+      — 1-day.jpg (137 KB), 2-night.jpg (92 KB), 3-chase.jpg (163 KB),
+      4-mission.jpg (160 KB); all 1280x720 JPEG, each <=256 KiB. Kit-starter
+      JPGs removed. Verified visually (chase JPEG matches the PNG frame).
+- [x] Kit check passes (`check --kit . --repo <repo>`)
+      — 4 passed, 0 failed, 16 skipped, 5 at submission; snapshot 48 files,
+      4,796,364 bytes at 84aca6eb. Re-run on the pushed commit.
+- [x] Commit + push baseline (84aca6ebec714e668157e3b0670249b44d45cadd,
+      origin HEAD confirmed); live quota verified 19 Nov ~07:07 WIB:
+      day cap 3, taken 0, left 3; hard limit 20, left 18; can_submit true;
+      entry fee null (free).
+- [ ] SUBMIT — BLOCKED 19 Nov ~07:08 WIB (see note below). Recording
+      01a1f275 still open; submit refuses an open recording. Per Mu's
+      13:39 order the recording was NOT stopped — awaiting parent decision.
 
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
