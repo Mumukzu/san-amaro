@@ -26,12 +26,30 @@ float hash13(vec3 p) {
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
 }
+float cloudBand(vec3 d, vec3 sunDir) {
+  // Cheap soft clouds: two ADDED low-frequency sine bands near the horizon
+  // (added, not multiplied — a product leaves large holes with no clouds;
+  // low frequency so the bands are hundreds of degrees wide and every
+  // camera direction catches some cloud). Brightest on the sun side.
+  float band = 0.5
+    + 0.35 * sin(d.x * 1.5 + d.z * 1.0 + 0.5)
+    + 0.35 * sin(d.z * 2.0 - d.x * 1.0 + 2.0);
+  float horiz = 1.0 - smoothstep(0.02, 0.55, d.y); // only low in the sky
+  float sunSide = 0.5 + 0.5 * dot(normalize(d), normalize(sunDir));
+  return smoothstep(0.35, 0.65, band) * horiz * (0.6 + 0.4 * sunSide);
+}
 void main() {
   vec3 d = normalize(vDir);
   float h = max(d.y, 0.0);
-  vec3 col = mix(horizonColor, topColor, pow(h, 0.55));
+  vec3 col = mix(horizonColor, topColor, pow(h, 0.4));
   float s = max(dot(d, normalize(sunDir)), 0.0);
-  col += sunColor * (pow(s, 350.0) * 1.4 + pow(s, 8.0) * 0.35);
+  col += sunColor * (pow(s, 350.0) * 1.6 + pow(s, 24.0) * 0.55 + pow(s, 6.0) * 0.45);
+  // Cloud bands: BRIGHT warm white, clearly lighter than the sky itself —
+  // the old cloud colour was the same orange as the horizon, so the clouds
+  // were invisible at sunset.
+  float cl = cloudBand(d, sunDir);
+  vec3 cloudCol = vec3(1.0, 0.85, 0.7) * 1.15;
+  col = mix(col, cloudCol, cl * 0.7 * (1.0 - starAmount));
   if (starAmount > 0.001 && d.y > 0.03) {
     vec3 cell = floor(d * 160.0);
     float hsh = hash13(cell);

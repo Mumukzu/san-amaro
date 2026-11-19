@@ -21,8 +21,9 @@ function blockKind(cx, cz) {
 }
 
 function drawGround(ctx, rng) {
-  // Base: dusty warm ground (block interiors show through the streets).
-  ctx.fillStyle = '#7a7268';
+  // Base: dark warm ground. The pale base was the prototype look — block
+  // interiors now read as city concrete, never empty concrete slabs.
+  ctx.fillStyle = '#5c554d';
   ctx.fillRect(0, 0, TEX, TEX);
 
   // Subtle noise over the whole ground so large areas never read flat.
@@ -39,14 +40,15 @@ function drawGround(ctx, rng) {
       const x0 = px(bx - WORLD.blockHalf); const z0 = py(bz + WORLD.blockHalf);
       const w = WORLD.blockHalf * 2 * SCALE;
       if (kind === 'plaza') {
-        ctx.fillStyle = '#b8a888';
+        ctx.fillStyle = '#8a7558';
         ctx.fillRect(x0, z0, w, w);
-        // Plaza tiles: checker of warm stone.
+        // Plaza tiles: checker of warm stone (kept muted — the pale
+        // checkerboard read as a chessboard in daylight).
         const t = w / 8;
         for (let i = 0; i < 8; i += 1) {
           for (let j = 0; j < 8; j += 1) {
             if ((i + j) % 2 === 0) {
-              ctx.fillStyle = '#c4b294';
+              ctx.fillStyle = '#7a6548';
               ctx.fillRect(x0 + i * t, z0 + j * t, t, t);
             }
           }
@@ -57,7 +59,7 @@ function drawGround(ctx, rng) {
         ctx.fillStyle = '#3f6a7a';
         ctx.beginPath(); ctx.arc(px(0), py(0), 11 * SCALE, 0, Math.PI * 2); ctx.fill();
       } else if (kind === 'strip') {
-        ctx.fillStyle = '#8a8578';
+        ctx.fillStyle = '#6a655b';
         ctx.fillRect(x0, z0, w, w);
         // Parking-lot stall lines on the front half.
         ctx.strokeStyle = '#d5d5d0'; ctx.lineWidth = 2;
@@ -66,8 +68,8 @@ function drawGround(ctx, rng) {
           ctx.beginPath(); ctx.moveTo(sx, z0 + w * 0.55); ctx.lineTo(sx, z0 + w * 0.95); ctx.stroke();
         }
       } else {
-        const tones = { tower: '#8d867a', mid: '#938b7c', dingbat: '#9a8f7d' };
-        ctx.fillStyle = tones[kind] || '#8d867a';
+        const tones = { tower: '#6b6258', mid: '#71695c', dingbat: '#776e60' };
+        ctx.fillStyle = tones[kind] || '#6b6258';
         ctx.fillRect(x0, z0, w, w);
       }
     }
@@ -99,6 +101,42 @@ function drawGround(ctx, rng) {
     }
   }
 
+  // Sidewalk tile joints: a joint every 2 m across each sidewalk band so the
+  // street edge reads as poured-concrete sidewalk, not flat pale ground.
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1.5;
+  for (const r of WORLD.roadAt) {
+    const a = WORLD.roadHalf; const b = WORLD.walkHalf;
+    for (let d = -300; d < 300; d += 2) {
+      ctx.beginPath(); ctx.moveTo(px(r - b), py(d)); ctx.lineTo(px(r - a), py(d)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px(r + a), py(d)); ctx.lineTo(px(r + b), py(d)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px(d), py(r - b)); ctx.lineTo(px(d), py(r - a)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px(d), py(r + a)); ctx.lineTo(px(d), py(r + b)); ctx.stroke();
+    }
+  }
+
+  // Tire-wear: darkened lane centres on the asphalt so roads read as
+  // driven-on, not fresh black slabs.
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  for (const r of WORLD.roadAt) {
+    ctx.fillRect(px(r - 3.4), 0, 1.7 * SCALE, TEX);
+    ctx.fillRect(px(r + 1.7), 0, 1.7 * SCALE, TEX);
+    ctx.fillRect(0, py(r - 3.4), TEX, 1.7 * SCALE);
+    ctx.fillRect(0, py(r + 1.7), TEX, 1.7 * SCALE);
+  }
+
+  // Oil stains: a few dark blobs on the asphalt near intersections.
+  for (let i = 0; i < 26; i += 1) {
+    const r = WORLD.roadAt[Math.floor(rng() * WORLD.roadAt.length)];
+    const along = -280 + rng() * 560;
+    const x = px(r + (rng() - 0.5) * 8); const y = py(along);
+    const rad = (1 + rng() * 2.4) * SCALE;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, 'rgba(8,8,10,0.5)');
+    g.addColorStop(1, 'rgba(8,8,10,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+  }
+
   // Lane markings: dashed centre yellow + solid edge white.
   ctx.fillStyle = PALETTE.laneYellow;
   for (const r of WORLD.roadAt) {
@@ -116,17 +154,18 @@ function drawGround(ctx, rng) {
   }
 
   // Crosswalks at every intersection: zebra stripes across all four arms.
+  // Narrow stripes (0.9 m) — wide ones read as white slabs from above.
   ctx.fillStyle = PALETTE.crosswalk;
   for (const rx of WORLD.roadAt) {
     for (const rz of WORLD.roadAt) {
       for (let i = -3; i <= 3; i += 1) {
         const off = i * 2.2;
         // North and south arms (stripes run E-W).
-        ctx.fillRect(px(rx + off - 0.8), py(rz - 12), 1.6 * SCALE, 3.4 * SCALE);
-        ctx.fillRect(px(rx + off - 0.8), py(rz + 12), 1.6 * SCALE, 3.4 * SCALE);
+        ctx.fillRect(px(rx + off - 0.45), py(rz - 12), 0.9 * SCALE, 3.4 * SCALE);
+        ctx.fillRect(px(rx + off - 0.45), py(rz + 12), 0.9 * SCALE, 3.4 * SCALE);
         // East and west arms (stripes run N-S).
-        ctx.fillRect(px(rx - 12), py(rz + off - 0.8), 3.4 * SCALE, 1.6 * SCALE);
-        ctx.fillRect(px(rx + 12), py(rz + off - 0.8), 3.4 * SCALE, 1.6 * SCALE);
+        ctx.fillRect(px(rx - 12), py(rz + off - 0.45), 3.4 * SCALE, 0.9 * SCALE);
+        ctx.fillRect(px(rx + 12), py(rz + off - 0.45), 3.4 * SCALE, 0.9 * SCALE);
       }
     }
   }
@@ -151,9 +190,9 @@ export function buildWorld(scene) {
   tex.anisotropy = 8;
   const mat = new THREE.MeshStandardMaterial({
     map: tex,
-    roughness: 0.32, // wet look: low roughness so the sky and lights sheen on it
-    metalness: 0.45,
-    envMapIntensity: 0.9,
+    roughness: 0.4, // wet look: low roughness so the sky and lights sheen on it
+    metalness: 0.2, // high metalness mirrored the pink sky across the whole
+    envMapIntensity: 0.6, // ground and washed it out — keep the sheen subtle
   });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(620, 620), mat);
   ground.rotation.x = -Math.PI / 2;

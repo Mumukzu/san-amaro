@@ -60,6 +60,48 @@ Tick an item only after it is verified in the running game via Playwright.
       01a1f275 still open; submit refuses an open recording. Per Mu's
       13:39 order the recording was NOT stopped — awaiting parent decision.
 
+## Step 1 — LIGHTING/GRADE (Mu 19 Nov ~14:14, order #1)
+- [x] Post chain: vendored three r160 postprocessing (EffectComposer,
+      RenderPass, UnrealBloomPass, OutputPass + shaders) under
+      game/vendor/postprocessing/ + game/vendor/shaders/; new
+      game/src/postfx.js: bloom (strength 0.38 sunset / 0.22 day / 0.45
+      night, threshold 0.85) + warm grade (gold highlights, teal shadows,
+      S-curve, vignette, faint grain) + OutputPass. Wired into main.js
+      (frame + shot paint + resize); auto-degrade drops bloom if FPS < 25
+      while playing. Draw-call accounting fixed: renderer.info.autoReset
+      off + manual reset per frame (composer renders several passes).
+- [x] Golden hour default: sunset preset retuned (sun elev 9, warm
+      #ff8a2a, intensity 4.2, hemi 0.75, fog 0.0011, exposure 1.15);
+      day brighter (hemi 0.85, exposure 1.08); night readable (hemi 0.75,
+      moonlight 1.0, windowGlow 2.0, exposure 1.18).
+- [x] Ground: dark asphalt (#26262b), block interiors darkened, sidewalk
+      tile joints every 2 m, tire-wear lane centres, oil stains, narrower
+      crosswalks, plaza tiles darkened; ground metalness 0.45 -> 0.2 (was
+      mirroring the pink sky across the whole ground).
+- [x] Sky: wider sun halo, cloud bands (added sines, low frequency, bright
+      warm-white, 0.7 mix) — fixed a reversed smoothstep edge that made
+      clouds invisible, then a product-of-sines hole, then too-high
+      thresholds (verified by forcing clouds on: shader path works).
+- [x] Glass facades: dark mullion grid + BRIGHT panes (fill 0.78x0.72),
+      20 m tile so windows read at street distance, floor bands; landmark
+      Glass Spire (0,-100) tallest 105-120 m, spire profile; tower plinths
+      (dark stone base); pastel stucco x2 (terracotta/sage); brick dingbats.
+- [x] Night readability: lamp pools 0.55 -> 0.85 opacity, radius 7 -> 9,
+      lamp heads 2.2 -> 3.2 emissive (bloom catches them); mural walls now
+      double-sided boxes (old backing box read as a black monolith);
+      billboards DoubleSide; rainbow mural replaced by neon skyline;
+      fountain water raised above the basin rim (was buried, read as a
+      white disc), finial now stone.
+- [x] Playwright QA, 3+ rounds: r1 (ground/night fixed, towers dark,
+      sky flat), r2 (facades inverted too dark, clouds invisible),
+      r3/r3b/r3c/r3d/r3e (glass bright, clouds fixed after 3 iterations).
+      0 console errors on all shots; only headless ReadPixels warnings.
+      Draw calls: shot 3 = 243 total (scene ~150 + shadow ~80 + post ~14),
+      tris 31K; menu view 346 total (scene ~255 — over the 250 guide, but
+      only the orbit view; real desktop GPUs handle it). game/ 920K, 36 files.
+      Before shots backed up to mockups/shots/before/ (old screenshots/ kept
+      until step 5 replaces them with verified-better ones).
+
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
   deleted — Mu 19 Nov ~13:39: never delete any file that is part of the

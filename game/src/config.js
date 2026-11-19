@@ -47,38 +47,41 @@ export const POLICE = {
   escapeTime: 6,
 };
 
-// Time-of-day presets. The default is sunset: the neon Miami-sunset mood.
+// Time-of-day presets. The default is golden hour (sunset): the neon
+// Miami-sunset mood. Golden hour means a LOW warm sun, long shadows and a
+// violet-to-orange sky — never a pale wash. Night stays readable: lamps,
+// neon and lit windows carry it, never near-black.
 export const TIME_PRESETS = {
   day: {
-    sunElev: 62, sunAzim: 205, sunColor: 0xfff2dd, sunIntensity: 3.2,
-    hemiSky: 0x7fb2d9, hemiGround: 0x5a5148, hemiIntensity: 0.7,
-    skyTop: 0x3f7fd0, skyHorizon: 0xcfe4ef, fogColor: 0xb8cdd9, fogDensity: 0.0009,
-    exposure: 1.0, windowGlow: 0.06, lampOn: false, headlightOn: false,
+    sunElev: 62, sunAzim: 205, sunColor: 0xfff2dd, sunIntensity: 3.6,
+    hemiSky: 0x8fb8dd, hemiGround: 0x6a5f52, hemiIntensity: 0.85,
+    skyTop: 0x2a6fd0, skyHorizon: 0xbfe0ea, fogColor: 0xaec6d2, fogDensity: 0.0007,
+    exposure: 1.08, windowGlow: 0.1, lampOn: false, headlightOn: false,
   },
   sunset: {
-    sunElev: 13, sunAzim: 252, sunColor: 0xff9d42, sunIntensity: 3.6,
-    hemiSky: 0xb98a7a, hemiGround: 0x4a3f36, hemiIntensity: 0.52,
-    skyTop: 0x5a4a8a, skyHorizon: 0xff9d5c, fogColor: 0xd89a6a, fogDensity: 0.0016,
-    exposure: 1.12, windowGlow: 0.8, lampOn: true, headlightOn: true,
+    sunElev: 9, sunAzim: 252, sunColor: 0xff8a2a, sunIntensity: 4.2,
+    hemiSky: 0xd8a080, hemiGround: 0x4a3f36, hemiIntensity: 0.75,
+    skyTop: 0x3d2f6e, skyHorizon: 0xff7a3c, fogColor: 0xc97a4a, fogDensity: 0.0011,
+    exposure: 1.15, windowGlow: 1.0, lampOn: true, headlightOn: true,
   },
   night: {
-    sunElev: 42, sunAzim: 130, sunColor: 0x8fa8ff, sunIntensity: 0.7,
-    hemiSky: 0x2a3550, hemiGround: 0x1a1512, hemiIntensity: 0.45,
-    skyTop: 0x0a0e24, skyHorizon: 0x2c2a4a, fogColor: 0x1c2036, fogDensity: 0.0022,
-    exposure: 1.1, windowGlow: 1.5, lampOn: true, headlightOn: true,
+    sunElev: 42, sunAzim: 130, sunColor: 0x9ab4ff, sunIntensity: 1.0,
+    hemiSky: 0x3a4a70, hemiGround: 0x241c18, hemiIntensity: 0.75,
+    skyTop: 0x0d1330, skyHorizon: 0x3a2a55, fogColor: 0x232840, fogDensity: 0.0016,
+    exposure: 1.18, windowGlow: 2.0, lampOn: true, headlightOn: true,
   },
 };
 export const TIME_ORDER = ['day', 'sunset', 'night'];
 export const DEFAULT_TIME = 'sunset';
 
 export const PALETTE = {
-  asphalt: '#2e2e33',
-  asphaltWet: '#232328',
-  sidewalk: '#8f8a80',
-  curb: '#6f6a62',
-  crosswalk: '#d8d4c8',
+  asphalt: '#26262b', // dark asphalt: roads read as roads, never pale slabs
+  asphaltWet: '#1e1e24',
+  sidewalk: '#7d766c', // warm concrete with tile joints (see world.js)
+  curb: '#5a544c',
+  crosswalk: '#c8c4b8',
   laneYellow: '#e8c832',
-  laneWhite: '#d5d5d0',
+  laneWhite: '#c8c8c2',
   stucco: '#c9bfa9',
   glassDark: '#1a2226',
   glassTeal: '#122421',

@@ -15,13 +15,13 @@ function facadeCanvases(drawWindows) {
   return { map, emissive };
 }
 
-function windowGrid(ctx, cols, rows, litChance, rng, litColors) {
+function windowGrid(ctx, cols, rows, litChance, rng, litColors, fillW = 0.64, fillH = 0.6) {
   const cw = 256 / cols; const rh = 256 / rows;
   const lit = [];
   for (let c = 0; c < cols; c += 1) {
     for (let r = 0; r < rows; r += 1) {
-      const x = c * cw + cw * 0.18; const y = r * rh + rh * 0.2;
-      const w = cw * 0.64; const h = rh * 0.6;
+      const x = c * cw + cw * (1 - fillW) / 2; const y = r * rh + rh * (1 - fillH) / 2;
+      const w = cw * fillW; const h = rh * fillH;
       const isLit = rng() < litChance;
       lit.push({ x, y, w, h, isLit, warm: pick(rng, litColors) });
     }
@@ -30,21 +30,31 @@ function windowGrid(ctx, cols, rows, litChance, rng, litColors) {
 }
 
 function glassFacade(rng) {
-  const lit = windowGrid(null, 6, 7, 0.34, rng, ['#ffd28a', '#ffbe6e', '#ffe9b0']);
+  // Big glass panes (fill 0.78 x 0.72): the mullion grid must not dominate,
+  // or the tower reads as a dark monolith from the street.
+  const lit = windowGrid(null, 4, 5, 0.42, rng, ['#ffd28a', '#ffbe6e', '#ffe9b0'], 0.78, 0.72);
   return facadeCanvases({
     map: (ctx) => {
-      const g = ctx.createLinearGradient(0, 0, 0, 256);
-      g.addColorStop(0, '#2a3a46'); g.addColorStop(1, '#1a2833');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+      // Glass towers read as a dark mullion grid with BRIGHT reflective
+      // panes — a flat blue gradient was a giant blue slab. The panes are
+      // light sky-blue with a white highlight streak; the grid is dark.
+      ctx.fillStyle = '#3a4a58'; ctx.fillRect(0, 0, 256, 256);
       for (const w of lit) {
-        ctx.fillStyle = w.isLit ? w.warm : '#0d1418';
+        const g = ctx.createLinearGradient(w.x, w.y, w.x, w.y + w.h);
+        if (w.isLit) {
+          g.addColorStop(0, w.warm); g.addColorStop(1, '#c98a3a');
+        } else {
+          g.addColorStop(0, '#a8c8dc'); g.addColorStop(1, '#6a8aa8');
+        }
+        ctx.fillStyle = g;
         ctx.fillRect(w.x, w.y, w.w, w.h);
-        ctx.strokeStyle = 'rgba(120,150,170,0.35)'; ctx.lineWidth = 1;
-        ctx.strokeRect(w.x, w.y, w.w, w.h);
+        // Highlight streak on each pane so the glass catches the light.
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(w.x + 2, w.y + 2, w.w * 0.35, w.h * 0.5);
       }
-      // Spandrel bands between floors.
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      for (let r = 0; r < 7; r += 1) ctx.fillRect(0, r * (256 / 7) + 30, 256, 3);
+      // Floor bands between rows (strong, so the tower reads as floors).
+      ctx.fillStyle = 'rgba(10,14,18,0.85)';
+      for (let r = 0; r < 5; r += 1) ctx.fillRect(0, r * (256 / 5) + 46, 256, 5);
     },
     emissive: (ctx) => {
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 256, 256);
@@ -57,11 +67,13 @@ function glassFacade(rng) {
   });
 }
 
-function stuccoFacade(rng) {
-  const lit = windowGrid(null, 4, 6, 0.26, rng, ['#ffd28a', '#ffce9a']);
+function stuccoFacade(rng, base = '#c9bfa9') {
+  // Art-deco pastels: each stucco material gets one warm pastel base so
+  // mid-rise blocks read as a Miami street, not grey slabs.
+  const lit = windowGrid(null, 5, 5, 0.3, rng, ['#ffd28a', '#ffce9a']);
   return facadeCanvases({
     map: (ctx) => {
-      ctx.fillStyle = '#c9bfa9'; ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
       for (let i = 0; i < 500; i += 1) {
         ctx.fillStyle = `rgba(90,80,60,${0.04 + rng() * 0.06})`;
         ctx.fillRect(rng() * 256, rng() * 256, 2, 2);
@@ -75,7 +87,7 @@ function stuccoFacade(rng) {
         ctx.fillStyle = w.isLit ? w.warm : '#232c36';
         ctx.fillRect(w.x, w.y, w.w, w.h);
         // Balcony slab under every other row.
-        if (Math.floor(w.y / (256 / 6)) % 2 === 0) {
+        if (Math.floor(w.y / (256 / 5)) % 2 === 0) {
           ctx.fillStyle = 'rgba(60,52,44,0.8)';
           ctx.fillRect(w.x - 4, w.y + w.h + 1, w.w + 8, 4);
         }
@@ -119,14 +131,53 @@ function shopFacade(rng) {
   });
 }
 
+function brickFacade(rng) {
+  // Red-brick apartments (dingbat blocks): mortar courses + small windows.
+  const lit = windowGrid(null, 5, 4, 0.3, rng, ['#ffd28a', '#ffce9a']);
+  return facadeCanvases({
+    map: (ctx) => {
+      ctx.fillStyle = '#8a4a3a'; ctx.fillRect(0, 0, 256, 256);
+      // Mortar courses.
+      ctx.strokeStyle = 'rgba(220,190,170,0.28)'; ctx.lineWidth = 1;
+      for (let y = 0; y < 256; y += 10) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+      }
+      for (let y = 0; y < 256; y += 10) {
+        const off = (y / 10) % 2 === 0 ? 0 : 12;
+        for (let x = off; x < 256; x += 24) {
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 10); ctx.stroke();
+        }
+      }
+      // Brick tone variation.
+      for (let i = 0; i < 300; i += 1) {
+        ctx.fillStyle = `rgba(${rng() < 0.5 ? '60,20,10' : '200,120,90'},${0.05 + rng() * 0.07})`;
+        ctx.fillRect(rng() * 256, rng() * 256, 4 + rng() * 8, 2 + rng() * 3);
+      }
+      for (const w of lit) {
+        ctx.fillStyle = '#2c2622'; ctx.fillRect(w.x - 3, w.y - 3, w.w + 6, w.h + 6);
+        ctx.fillStyle = w.isLit ? w.warm : '#1e2830';
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+      }
+    },
+    emissive: (ctx) => {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 256, 256);
+      for (const w of lit) {
+        if (!w.isLit) continue;
+        ctx.fillStyle = w.warm;
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+      }
+    },
+  });
+}
+
 // ---- Building construction ----
 const PROFILES = ['taper', 'step', 'crown', 'spire', 'chamfer', 'split'];
 
-function towerParts(rng, w, d, h) {
-  const profile = pick(rng, PROFILES);
+function towerParts(rng, w, d, h, forceProfile = null) {
+  const profile = forceProfile || pick(rng, PROFILES);
   const parts = [];
   const h1 = h * 0.62;
-  parts.push(texturedBox(w, h1, d, 10));
+  parts.push(texturedBox(w, h1, d, 20));
   parts[0].matrix.setPosition(0, h1 / 2, 0);
   // top = { w, d, y }: footprint and height of the highest tier (for the roof slab).
   let top = { w, d, y: h1 };
@@ -136,20 +187,20 @@ function towerParts(rng, w, d, h) {
     parts.push({ geo: topTier, matrix: new THREE.Matrix4().setPosition(0, h1 + h * 0.19, 0), uvScale: [w / 10, h * 0.38 / 10] });
     top = { w: w * 0.64, d: d * 0.64, y: h };
   } else if (profile === 'step') {
-    parts.push(texturedBox(w * 0.68, h * 0.24, d * 0.68, 10));
+    parts.push(texturedBox(w * 0.68, h * 0.24, d * 0.68, 20));
     parts[1].matrix.setPosition(0, h1 + h * 0.12, 0);
-    parts.push(texturedBox(w * 0.42, h * 0.14, d * 0.42, 10));
+    parts.push(texturedBox(w * 0.42, h * 0.14, d * 0.42, 20));
     parts[2].matrix.setPosition(0, h1 + h * 0.24 + h * 0.07, 0);
     top = { w: w * 0.42, d: d * 0.42, y: h };
   } else if (profile === 'crown') {
-    parts.push(texturedBox(w * 0.7, h * 0.2, d * 0.7, 10));
+    parts.push(texturedBox(w * 0.7, h * 0.2, d * 0.7, 20));
     parts[1].matrix.setPosition(0, h1 + h * 0.1, 0);
     const crown = new THREE.BoxGeometry(w * 0.5, h * 0.1, d * 0.5);
     crown.rotateY(0.5);
     parts.push({ geo: crown, matrix: new THREE.Matrix4().setPosition(0, h1 + h * 0.25, 0), uvScale: [w / 10, h * 0.1 / 10] });
     top = { w: w * 0.5, d: d * 0.5, y: h1 + h * 0.3 };
   } else if (profile === 'spire') {
-    parts.push(texturedBox(w * 0.55, h * 0.22, d * 0.55, 10));
+    parts.push(texturedBox(w * 0.55, h * 0.22, d * 0.55, 20));
     parts[1].matrix.setPosition(0, h1 + h * 0.11, 0);
     const spire = new THREE.ConeGeometry(Math.min(w, d) * 0.16, h * 0.22, 4);
     parts.push({ geo: spire, matrix: new THREE.Matrix4().setPosition(0, h1 + h * 0.22 + h * 0.11, 0), uvScale: [1, 1] });
@@ -160,9 +211,9 @@ function towerParts(rng, w, d, h) {
     parts.push({ geo: dia, matrix: new THREE.Matrix4().setPosition(0, h1 + h * 0.15, 0), uvScale: [w / 10, h * 0.3 / 10] });
     top = { w: w * 0.62, d: d * 0.62, y: h1 + h * 0.3 };
   } else { // split: two slabs with a gap
-    parts.push(texturedBox(w * 0.42, h * 0.36, d * 0.9, 10));
+    parts.push(texturedBox(w * 0.42, h * 0.36, d * 0.9, 20));
     parts[1].matrix.setPosition(-w * 0.26, h1 + h * 0.18, 0);
-    parts.push(texturedBox(w * 0.42, h * 0.3, d * 0.9, 10));
+    parts.push(texturedBox(w * 0.42, h * 0.3, d * 0.9, 20));
     parts[2].matrix.setPosition(w * 0.26, h1 + h * 0.15, 0);
     top = { w, d: d * 0.9, y: h1 + h * 0.36 };
   }
@@ -179,16 +230,26 @@ const SHOP_SIGNS = [
 export function buildBuildings(scene, layout) {
   const rng = mulberry32(WORLD.seed + 7);
   const glass = glassFacade(rng);
-  const stucco = stuccoFacade(rng);
+  const stuccoA = stuccoFacade(rng, '#d8b8a0'); // terracotta pastel
+  const stuccoB = stuccoFacade(rng, '#b8c8b0'); // sage pastel
+  const brick = brickFacade(rng);
   const shop = shopFacade(rng);
   const mats = {
     glass: new THREE.MeshStandardMaterial({
       map: glass.map, emissiveMap: glass.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
-      roughness: 0.18, metalness: 0.75, envMapIntensity: 1.2,
+      roughness: 0.3, metalness: 0.5, envMapIntensity: 1.1,
     }),
-    stucco: new THREE.MeshStandardMaterial({
-      map: stucco.map, emissiveMap: stucco.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
+    stuccoA: new THREE.MeshStandardMaterial({
+      map: stuccoA.map, emissiveMap: stuccoA.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
       roughness: 0.9, metalness: 0, envMapIntensity: 0.25,
+    }),
+    stuccoB: new THREE.MeshStandardMaterial({
+      map: stuccoB.map, emissiveMap: stuccoB.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
+      roughness: 0.9, metalness: 0, envMapIntensity: 0.25,
+    }),
+    brick: new THREE.MeshStandardMaterial({
+      map: brick.map, emissiveMap: brick.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
+      roughness: 0.85, metalness: 0, envMapIntensity: 0.3,
     }),
     shop: new THREE.MeshStandardMaterial({
       map: shop.map, emissiveMap: shop.emissive, emissive: 0xffffff, emissiveIntensity: 0.55,
@@ -196,18 +257,30 @@ export function buildBuildings(scene, layout) {
     }),
   };
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x3a3a40, roughness: 0.95, metalness: 0 });
+  const plinthMat = new THREE.MeshStandardMaterial({ color: 0x2c2a28, roughness: 0.85, metalness: 0.05 });
   const colliders = [];
   const roofSpots = []; // { x, y, z } for rooftop props
   const signMats = [];
   let signIndex = 0;
 
-  function addBuilding(parts, mat, cx, cz, hx, hz, slab) {
+  function addBuilding(parts, mat, cx, cz, hx, hz, slab, plinth = null) {
     // Dark roof slab on top of the highest tier so tower tops read as roofs.
     const s = texturedBox(slab.w + 0.6, 0.5, slab.d + 0.6, 10);
     s.matrix.setPosition(0, slab.y + 0.25, 0);
     s.matIndex = 1;
-    const geo = mergeGeoms([...parts, s]);
-    const mesh = new THREE.Mesh(geo, [mat, roofMat]);
+    const entries = [...parts, s];
+    let materials = [mat, roofMat];
+    if (plinth) {
+      // Dark stone plinth at street level: towers sit on a real base instead
+      // of glass running straight into the pavement.
+      const p = texturedBox(plinth.w + 1, 3, plinth.d + 1, 10);
+      p.matrix.setPosition(0, 1.5, 0);
+      p.matIndex = 2;
+      entries.push(p);
+      materials = [mat, roofMat, plinthMat];
+    }
+    const geo = mergeGeoms(entries);
+    const mesh = new THREE.Mesh(geo, materials);
     mesh.position.set(cx, 0, cz);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -221,9 +294,12 @@ export function buildBuildings(scene, layout) {
     if (kind === 'plaza') continue;
     if (kind === 'tower') {
       const w = rand(rng, 30, 42); const d = rand(rng, 30, 42);
-      const h = rand(rng, 46, 84);
-      const { parts, top } = towerParts(rng, w, d, h);
-      addBuilding(parts, mats.glass, cx, cz, w / 2, d / 2, top);
+      // Landmark: the Glass Spire north of the plaza is the tallest tower
+      // in the slice (the story's finale heist target).
+      const landmark = cx === 0 && cz === -100;
+      const h = landmark ? rand(rng, 105, 120) : rand(rng, 40, 110);
+      const { parts, top } = towerParts(rng, w, d, h, landmark ? 'spire' : null);
+      addBuilding(parts, mats.glass, cx, cz, w / 2, d / 2, top, { w, d });
     } else if (kind === 'mid') {
       for (const [ox, oz, w, d, h] of [
         [-14, -8, 30, 22, rand(rng, 13, 22)],
@@ -233,7 +309,8 @@ export function buildBuildings(scene, layout) {
         parts[0].matrix.setPosition(0, h / 2, 0);
         parts.push(texturedBox(w * 0.7, 2.5, d * 0.7, 10));
         parts[1].matrix.setPosition(0, h + 1.25, 0);
-        addBuilding(parts, mats.stucco, cx + ox, cz + oz, w / 2, d / 2, { w: w * 0.7, d: d * 0.7, y: h + 2.5 });
+        const mat = (ox < 0) ? mats.stuccoA : mats.stuccoB;
+        addBuilding(parts, mat, cx + ox, cz + oz, w / 2, d / 2, { w: w * 0.7, d: d * 0.7, y: h + 2.5 });
       }
     } else if (kind === 'strip') {
       const w = 62; const d = 18; const h = 7;
@@ -263,7 +340,7 @@ export function buildBuildings(scene, layout) {
         }
         parts.push(texturedBox(w, h - 3, d, 10));
         parts[parts.length - 1].matrix.setPosition(0, 3 + (h - 3) / 2, 0);
-        addBuilding(parts, mats.stucco, cx, cz + oz, w / 2, d / 2, { w, d, y: h });
+        addBuilding(parts, mats.brick, cx, cz + oz, w / 2, d / 2, { w, d, y: h });
       }
     }
   }

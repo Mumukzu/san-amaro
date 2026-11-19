@@ -48,17 +48,25 @@ function muralTexture(seed, style) {
         }
       }
     } else if (style === 1) {
-      // Geometric waves.
-      ctx.fillStyle = '#12242e'; ctx.fillRect(0, 0, 512, 320);
-      const cols = ['#22e6ff', '#ff2e88', '#ffd23e', '#ff7a1a', '#7aff5a'];
-      for (let i = 0; i < 6; i += 1) {
-        ctx.fillStyle = cols[i % cols.length];
-        ctx.beginPath();
-        ctx.moveTo(0, 320);
-        for (let x = 0; x <= 512; x += 32) {
-          ctx.lineTo(x, 60 + i * 40 + Math.sin(x * 0.02 + i) * 30);
+      // Neon skyline at dusk: dark violet, neon-outlined towers with lit
+      // windows, a pink sun. (The old rainbow waves read as a cheap poster.)
+      ctx.fillStyle = '#1d1430'; ctx.fillRect(0, 0, 512, 320);
+      ctx.fillStyle = '#ff2e88';
+      ctx.beginPath(); ctx.arc(400, 90, 46, 0, Math.PI * 2); ctx.fill();
+      const silhouettes = [[20, 200, 70], [110, 260, 90], [220, 180, 60], [300, 240, 80], [400, 170, 66]];
+      const neon = ['#22e6ff', '#ff2e88', '#ffd23e', '#7aff5a'];
+      for (let i = 0; i < silhouettes.length; i += 1) {
+        const [x, h, w] = silhouettes[i];
+        ctx.fillStyle = '#0d0a1a';
+        ctx.fillRect(x, 320 - h, w, h);
+        ctx.strokeStyle = neon[i % neon.length]; ctx.lineWidth = 3;
+        ctx.strokeRect(x + 2, 320 - h + 2, w - 4, h - 4);
+        ctx.fillStyle = '#ffd28a';
+        for (let wy = 320 - h + 14; wy < 300; wy += 22) {
+          for (let wx = x + 10; wx < x + w - 10; wx += 18) {
+            if (rng() < 0.4) ctx.fillRect(wx, wy, 8, 10);
+          }
         }
-        ctx.lineTo(512, 320); ctx.closePath(); ctx.fill();
       }
     } else {
       // Big sun + city blocks.
@@ -110,7 +118,7 @@ export function buildProps(scene) {
     g.addColorStop(1, 'rgba(255,180,90,0)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
   });
-  const poolGeo = new THREE.CircleGeometry(7, 20);
+  const poolGeo = new THREE.CircleGeometry(9, 20);
   const poolMat = new THREE.MeshBasicMaterial({
     map: poolTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -212,7 +220,7 @@ export function buildProps(scene) {
     const tex = signTexture(b.text, b.sub, b.bg, b.fg, 1024, 320);
     const mat = new THREE.MeshStandardMaterial({
       map: tex.map, emissiveMap: tex.emissive, emissive: 0xffffff, emissiveIntensity: 0.4,
-      roughness: 0.4, metalness: 0.1,
+      roughness: 0.4, metalness: 0.1, side: THREE.DoubleSide,
     });
     glowMats.push(mat);
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(16, 5), mat);
@@ -238,16 +246,14 @@ export function buildProps(scene) {
   murals.forEach((m, i) => {
     const tex = muralTexture(WORLD.seed + 31 + i, i);
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0 });
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(14, 8.75), mat);
+    // A thin BOX, not a plane + solid backing frame: the old backing box
+    // read as a black monolith from behind (the plane was single-sided).
+    // A box shows the mural on both faces.
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 8.75, 0.3), mat);
     wall.position.set(m.x, 4.6, m.z);
     wall.rotation.y = m.ry;
+    wall.castShadow = true;
     scene.add(wall);
-    const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(14.6, 9.2, 0.3),
-      new THREE.MeshStandardMaterial({ color: 0x4a4238, roughness: 0.9, metalness: 0 }),
-    );
-    frame.position.set(m.x, 4.6, m.z - (m.ry === 0 ? 0.2 : -0.2));
-    scene.add(frame);
     colliders.push(aabb(m.x, m.z, 7.3, 0.4));
   });
 
@@ -307,28 +313,30 @@ export function buildProps(scene) {
   {
     const basin = new THREE.Mesh(
       new THREE.CylinderGeometry(12, 12.6, 1.1, 24),
-      new THREE.MeshStandardMaterial({ color: 0x9a938a, roughness: 0.85, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ color: 0x7a7268, roughness: 0.85, metalness: 0 }),
     );
     basin.position.set(0, 0.55, 0);
     basin.castShadow = true; basin.receiveShadow = true;
     scene.add(basin);
+    // Water sits just ABOVE the basin rim: it was buried under the basin's
+    // top face before, so the fountain read as a white disc.
     const water = new THREE.Mesh(
       new THREE.CircleGeometry(11.2, 24),
       new THREE.MeshStandardMaterial({ color: 0x3f7a9a, roughness: 0.05, metalness: 0.1, envMapIntensity: 1.5 }),
     );
     water.rotation.x = -Math.PI / 2;
-    water.position.set(0, 1.02, 0);
+    water.position.set(0, 1.12, 0);
     scene.add(water);
     const column = new THREE.Mesh(
       new THREE.CylinderGeometry(1.1, 1.5, 3.2, 12),
-      new THREE.MeshStandardMaterial({ color: 0x9a938a, roughness: 0.85, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ color: 0x7a7268, roughness: 0.85, metalness: 0 }),
     );
     column.position.set(0, 2.4, 0);
     column.castShadow = true;
     scene.add(column);
     const top = new THREE.Mesh(
       new THREE.SphereGeometry(1.6, 12, 10),
-      new THREE.MeshStandardMaterial({ color: 0x3f7a9a, roughness: 0.1, metalness: 0.2, envMapIntensity: 1.5 }),
+      new THREE.MeshStandardMaterial({ color: 0x7a7268, roughness: 0.8, metalness: 0.05 }),
     );
     top.position.set(0, 4.6, 0);
     scene.add(top);
@@ -336,9 +344,11 @@ export function buildProps(scene) {
   }
 
   function setGlow(windowGlow, lampOn) {
+    // Night readability: pools are bigger and stronger (0.85), lamp heads
+    // burn at 3.2 so bloom catches them — the street must glow, not go black.
     for (const m of glowMats) m.emissiveIntensity = 0.15 + windowGlow * 0.9;
-    for (const m of lampHeadMats) m.emissiveIntensity = lampOn ? 2.2 : 0;
-    for (const m of poolMats) m.opacity = lampOn ? 0.55 : 0;
+    for (const m of lampHeadMats) m.emissiveIntensity = lampOn ? 3.2 : 0;
+    for (const m of poolMats) m.opacity = lampOn ? 0.85 : 0;
   }
 
   return { colliders, setGlow };

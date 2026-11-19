@@ -24,6 +24,7 @@ import { loadSave, saveGame } from './save.js';
 import { AudioSys } from './audio.js';
 import { createInput } from './input.js';
 import { stageShot } from './shots.js';
+import { PostFX } from './postfx.js';
 
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
@@ -54,6 +55,12 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// Draw-call accounting: the post chain renders several passes per frame
+// (scene + bloom mips + grade + output), and renderer.info resets after
+// every render() call by default — so a plain read only ever shows the last
+// fullscreen quad (1 call). Disable the auto-reset and reset manually once
+// per frame, so state.drawCalls is the honest total for the frame.
+renderer.info.autoReset = false;
 
 // ---- World + systems ----
 const scene = new THREE.Scene();
@@ -71,6 +78,7 @@ const police = new Police(scene, vehicles);
 const player = new Player(scene);
 state.player = player;
 const camera = new Camera();
+const postfx = new PostFX(renderer, scene, camera.camera);
 const hud = new HUD(document);
 const minimap = new Minimap(document.getElementById('hud-minimap'));
 const audio = new AudioSys();
@@ -79,6 +87,7 @@ const input = createInput(canvas);
 function applyGlow() {
   buildings.setWindowGlow(sky.windowGlow);
   props.setGlow(sky.windowGlow, sky.lampOn);
+  postfx.setPreset(state.timePreset || DEFAULT_TIME);
 }
 
 // Saved progress (money, escapes, missions, time of day).
@@ -89,7 +98,7 @@ applyGlow();
 const game = {
   sky, player, vehicles, camera, hud, police, lights, traffic, peds,
   lightIntersections: LIGHT_INTERSECTIONS,
-  applyGlow,
+  applyGlow, scene, renderer,
   focusPos() {
     return state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
   },
@@ -443,7 +452,9 @@ function frame(now) {
     audio.update();
     updatePanels();
   }
-  renderer.render(scene, camera.camera);
+  // Post chain (bloom + warm grade + vignette) renders to the canvas.
+  renderer.info.reset(); // start the per-frame draw-call count here
+  postfx.render(dt);
 
   fpsFrames += 1;
   const ft = performance.now();
@@ -453,12 +464,20 @@ function frame(now) {
     fpsTime = ft;
     state.drawCalls = renderer.info.render.calls;
     state.triangles = renderer.info.render.triangles;
+    // Auto-degrade: on a weak machine, drop bloom before the game stutters.
+    // (Headless SwiftShader runs ~1 FPS by nature — the degrade only fires
+    // on real hardware once the game is actually playing.)
+    if (phase === 'playing' && state.fps > 0 && state.fps < 25 && postfx.bloomOn) {
+      postfx.setBloom(false);
+      state.postfxDegraded = true;
+    }
   }
 }
 
 window.addEventListener('resize', () => {
   camera.resize();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  postfx.setSize(window.innerWidth, window.innerHeight);
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && phase === 'playing') pauseGame();
@@ -481,7 +500,10 @@ if (shot) {
     sky.update(0.016, game.focusPos());
     applyGlow();
     camera.update(0.016, game.focusPos(), game.focusHeading(), state.speed);
-    renderer.render(scene, camera.camera);
+    renderer.info.reset();
+    postfx.render(0.016);
+    state.drawCalls = renderer.info.render.calls;
+    state.triangles = renderer.info.render.triangles;
     painted += 1;
     if (painted < 2) requestAnimationFrame(paint);
     else window.__shotReady = true;
