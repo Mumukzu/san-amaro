@@ -27,15 +27,18 @@ vehicles, radio and dialogue live in data files, not in engine code.
   still smell of salt and diesel; downtown is glass and ambition; the beach
   never sleeps. Everybody here is either chasing the sunset or running from
   it.
-- Districts (7). Playable slice: **Downtown Core only** (~600x600 m) in the
-  baseline; the other six are the full-city design target, added as scope
-  allows. The bible is the source of truth, not a promise all seven ship
-  in the first submission.
+- Districts (7). Submission scope: **submission 1 = Downtown Core slice**
+  (~600x600 m); **submission 2 = minimum 3 districts — Downtown Core +
+  Sunset Beach ("The Strip") + Harbor Docks**; the other four are the
+  full-city design target, added as scope allows. The bible is the source
+  of truth, not a promise all seven ship in the first submission. City
+  generation is data-driven: districts are added via data files, not
+  engine rewrites.
   1. **Downtown Core ("The Glass")** — glass towers, tight streets, plaza
      and fountain. Map color steel blue. Look: curtain-wall towers with
      randomized silhouettes, stucco mid-rise, strip malls, palms, murals.
      Palette: charcoal glass, warm stucco, neon pink. Vibe: ambition and
-     rush hour. Ruled by: contested (Chrome Kings vs SAPD). Standing perk:
+     rush hour. Ruled by: contested (Chrome Kings vs SAMPD). Standing perk:
      **Street Smart** — wanted decays 25% faster.
   2. **Sunset Beach ("The Strip")** — boardwalk, sand, pier, beach bars.
      Map color coral pink. Look: low motels, surf shops, palm rows, wooden
@@ -75,10 +78,10 @@ vehicles, radio and dialogue live in data files, not in engine code.
     spot, shot backdrop.
   - **Pier 9 Boardwalk** — The Strip — race start, side-job hub.
   - **Canal Lift Bridge** — Old Canal — signature stunt jump / escape.
-  - **Luz Auto Garage** — Downtown edge — player safehouse and garage.
-  - **Pearl Diner** — Neon Mile — neutral meeting spot, side-job giver.
+  - **Palm & Piston Garage** — Downtown edge — player safehouse and garage.
+  - **Mabel's Pie House** — Neon Mile — neutral meeting spot, side-job giver.
 - Street naming rules (e.g. boulevards, avenues, causeway names):
-  Boulevards are named after light and time (Sunset Boulevard, Golden Hour
+  Boulevards are named after light and time (Lantern Boulevard, Golden Hour
   Avenue, Dusk Drive). Avenues are named after palms and flowers (Palm Row,
   Hibiscus Avenue, Jacaranda Lane). Dock streets are named after the sea
   (Harbor Way, Anchor Street, Tide Lane). Hill streets are named after
@@ -92,7 +95,7 @@ vehicles, radio and dialogue live in data files, not in engine code.
    scared. Voice lines: short, confident, street-smart ("Watch the paint.",
    "That's my car now."). Portrait: three-quarter view, cap backwards,
    sunset gradient behind, teal jacket pop.
-2. **Lena "Luz" Ortiz**, 31, ally / mechanic, runs Luz Auto. Look:
+2. **Nadia "Nails" Okafor**, 31, ally / mechanic, runs Palm & Piston. Look:
    oil-stained denim overalls over a red tee, red bandana, curly dark hair
    in a bun, grease on one cheek. Personality: blunt, warm, the only adult
    in the room. Voice: dry one-liners ("You break it, you bought it.").
@@ -113,7 +116,7 @@ vehicles, radio and dialogue live in data files, not in engine code.
    left eyebrow. Personality: patient, theatrical, collects debts and
    grudges. Voice: slow, polite, menacing ("Let's not make this ugly.").
    Portrait: low angle, chrome jacket gleaming, downtown behind.
-6. **Captain Rosa Delgado**, 48, cop / SAPD captain. Look: navy uniform,
+6. **Captain Rosa Delgado**, 48, cop / SAMPD captain. Look: navy uniform,
    captain's bars, grey-streaked bun, reading glasses on a chain.
    Personality: by-the-book in public, tired in private, hates the Kings
    more than she hates Jay. Voice: clipped, official, with a dry edge.
@@ -121,9 +124,9 @@ vehicles, radio and dialogue live in data files, not in engine code.
 7. **Officer Ben "Bump" Kowalski**, 33, cop / patrol, Delgado's driver.
    Look: navy uniform two sizes too enthusiastic, moustache, donut dust on
    the vest. Personality: earnest, slow to anger, surprisingly good driver.
-   Voice: friendly radio chatter ("Adam-12, in pursuit, over."). Portrait:
+   Voice: friendly radio chatter ("Bay-12, in pursuit, over."). Portrait:
    leaning on a cruiser, grinning.
-8. **Auntie Pearl**, 60, neutral / diner owner, side-job giver. Look:
+8. **Auntie Mabel**, 60, neutral / diner owner, side-job giver. Look:
    floral apron, silver curls, cat-eye glasses, pie always in hand.
    Personality: feeds everyone, judges no one, remembers everything.
    Voice: warm, maternal, with a steel edge ("Eat first. Then we talk.").
@@ -142,16 +145,16 @@ vehicles, radio and dialogue live in data files, not in engine code.
     workers who control the port and don't take orders from anyone.
     Weapons: wrenches, shotguns (for "pest control"). Behaviour: stand
     their ground, help the player if standing is high.
-- Police department: **San Amaro Police Department (SAPD)**, navy/white.
-  Unit types: Patrol cruiser (Adam-##), Interceptor (Victor-##, faster,
+- Police department: **San Amaro Metropolitan Police Department (SAMPD)**, navy/white.
+  Unit types: Patrol cruiser (Bay-##), Interceptor (Victor-##, faster,
   3+ stars), Air-1 helicopter (4+ stars, spotlight, visual only in the
-  slice), Roadblock units (4+ stars). Callsign scheme: "Adam-12",
+  slice), Roadblock units (4+ stars). Callsign scheme: "Bay-12",
   "Victor-7", "Air-1", "K-9" (dogs, never shown). Tactics per star level:
   1 star — one cruiser follows, easy to lose. 2 stars — two cruisers,
   they ram. 3 stars — interceptors join, they cut off and block. 4 stars
   — roadblocks on the boulevard + Air-1 spotlight. 5 stars — everything,
   plus foot officers (later slice).
-- Neutral groups (shops, unions, valets, etc.): Pearl Diner staff
+- Neutral groups (shops, unions, valets, etc.): Mabel's Pie House staff
   (neutral ground, no fighting inside), Valet Guild (park cars, tip for
   info), Sunset Taxi Co-op (taxi side jobs), Beach Lifeguards (Strip,
   first aid = free heal).
@@ -160,7 +163,7 @@ vehicles, radio and dialogue live in data files, not in engine code.
 One line per chapter: title, location, goal, twist, reward.
 1. **First Wheels** — Downtown — steal a car, deliver it, lose the cops —
    twist: the car belongs to a King — $500.
-2. **Luz's List** — Downtown — three deliveries across the district —
+2. **Nadia's List** — Downtown — three deliveries across the district —
    twist: one package is police evidence — $800.
 3. **Beach Run** — The Strip — win a street race against the Vipers —
    twist: their champion is Mara, Jay's old flame — $1,200 + Viper rep.
@@ -168,14 +171,14 @@ One line per chapter: title, location, goal, twist, reward.
    names the Kings' inside cop — $1,500.
 5. **Canal Run** — Old Canal — escape a 3-star chase over the lift bridge
    — twist: the bridge is up; jump it — $1,800.
-6. **Neon Mile** — Neon Mile — defend Luz Auto from a Kings hit — twist:
+6. **Neon Mile** — Neon Mile — defend Palm & Piston from a Kings hit — twist:
    Vince offers Jay a job instead — $2,000.
 7. **The Inside Cop** — Downtown — expose Lt. Marsh, the dirty cop —
    twist: Marsh worked for the Vipers, not the Kings — $2,500.
 8. **Glass Spire** — Downtown — heist the Kings' cash from the Spire —
    twist: Mara already took it; split it or fight her — $5,000.
 - Opening situation and final payoff (3 sentences): Jay comes home after
-  three years away to find his late brother's garage, Luz Auto, $50,000 in
+  three years away to find his late brother's garage, Palm & Piston, $50,000 in
   debt to the Chrome Kings with one week to pay. He steals, races and runs
   his way through every district of San Amaro to raise the money. In the
   finale he takes the Kings' own cash from the Glass Spire, pays the debt,
@@ -184,17 +187,17 @@ One line per chapter: title, location, goal, twist, reward.
 ## 6. Missions and side activities
 - Story missions (8+): id, giver, objective types, stages, fail conditions,
   reward, par time:
-  - M1 First Wheels — Luz — steal car → drive to marker → lose police —
+  - M1 First Wheels — Nadia — steal car → drive to marker → lose police —
     fail: busted / car destroyed — $500 — par 4:00.
-  - M2 Luz's List — Luz — deliver 3 packages → avoid police — fail:
+  - M2 Nadia's List — Nadia — deliver 3 packages → avoid police — fail:
     busted / package lost — $800 — par 6:00.
   - M3 Beach Run — Mara — win race (3 laps, Pier 9 circuit) — fail:
     finish 2nd+ — $1,200 — par 5:00.
   - M4 Dock Rats — Theo — steal manifest → photograph it → escape docks
     — fail: busted / seen by Union — $1,500 — par 7:00.
-  - M5 Canal Run — Luz — reach the bridge → jump it at 3 stars — fail:
+  - M5 Canal Run — Nadia — reach the bridge → jump it at 3 stars — fail:
     busted / car in the canal — $1,800 — par 5:00.
-  - M6 Neon Mile — Luz — defend garage (3 waves) → chase the getaway car
+  - M6 Neon Mile — Nadia — defend garage (3 waves) → chase the getaway car
     — fail: garage burns / busted — $2,000 — par 8:00.
   - M7 The Inside Cop — Delgado — tail Marsh → photograph the handoff →
     deliver evidence — fail: spotted / busted — $2,500 — par 8:00.
@@ -216,7 +219,7 @@ Name, class (sports, sedan, muscle, van, truck, bike, police, boat), top
 speed, handling note, look (body shape, color, spoiler, lights):
 1. **Comet GT** — sports — 190 km/h — sharp, grippy, twitchy at the
    limit — low wedge, candy red, big wing, LED strips.
-2. **Marlin Sedan** — sedan — 150 km/h — balanced, the everyman car —
+2. **Marina Sedan** — sedan — 150 km/h — balanced, the everyman car —
    four-door, muted blue, chrome trim, soft headlights.
 3. **Bruiser** — muscle — 165 km/h — heavy, drifts wide, huge torque —
    long hood, matte black, hood scoop, round lamps.
@@ -224,13 +227,13 @@ speed, handling note, look (body shape, color, spoiler, lights):
    cream/brown, roof rack.
 5. **Longhaul** — truck — 120 km/h — very heavy, plows through — cab-over,
    rust orange, bull bar, fog lamps.
-6. **Wasp** — bike — 175 km/h — nimble, fragile, wheelies — slim, neon
+6. **Dragonfly** — bike — 175 km/h — nimble, fragile, wheelies — slim, neon
    yellow, single headlamp.
 7. **Interceptor** — police — 180 km/h — pursuit-tuned, stiff — white
    with navy doors, light bar, push bar.
 8. **Bay Runner** — boat — 90 km/h on water — docks and canals only —
    white hull, teal stripe, outboard motor.
-9. **La Perla** — lowrider — 140 km/h — hydraulics bounce at idle —
+9. **Flamingo** — lowrider — 140 km/h — hydraulics bounce at idle —
    candy pink, chrome rims, mural on the hood.
 
 ## 8. Weapons and gear
@@ -247,7 +250,7 @@ Slots 1-5 with names, damage, ammo, rep requirement, look:
    grey, long barrel.
 Clothing shops and outfits: **Thread House** (street: tees, caps,
 sneakers, $50-300); **Velvet Rope** (flashy: gold chains, silk shirts,
-$400-1,200); **Luz Workwear** (mechanic: overalls, boots, gloves,
+$400-1,200); **Torque Workwear** (mechanic: overalls, boots, gloves,
 $80-250). Outfits change the player model colors; Velvet Rope outfits
 give +5% mission pay (looking the part).
 
@@ -261,30 +264,30 @@ give +5% mission pay (looking the part).
 - Reputation levels (names, XP thresholds, what each unlocks): Nobody
   (0) — nothing. Street (200 XP) — P9 pistol, taxi jobs. Known (600 XP)
   — Viper SMG, race invites, 5% shop discount. Respected (1,200 XP) —
-  Scattergun, crew: Lena (free repairs), 10% discount. Feared (2,000 XP)
+  Scattergun, crew: Nadia (free repairs), 10% discount. Feared (2,000 XP)
   — Longshot rifle, crew: Mara (race +25%), police look the other way
   10% faster. Legend (3,500 XP) — Velvet Rope outfits, crew: Theo (+15%
   mission pay), Glass Spire penthouse.
-- Crew members and their perks: Lena (mechanic — free repairs, garage
+- Crew members and their perks: Nadia (mechanic — free repairs, garage
   upgrades), Theo (fence — +15% mission pay, sells rare cars), Mara
-  (driver — race payouts +25%, unlocks La Perla), Auntie Pearl (info —
+  (driver — race payouts +25%, unlocks Flamingo), Auntie Mabel (info —
   postcards and collectibles shown on the map).
 
 ## 10. Radio and sound
 - Stations (3+): name, frequency, genre, mood, track list (original titles
   and artist names, all fictional):
-  - **Wave 98.7 — Sunset FM** — synthwave / chill — golden-hour driving.
+  - **Neon Tide 102.5** — synthwave / chill — golden-hour driving.
     Tracks: "Neon Horizon" — Midnight Palms; "Golden Hour Drive" —
-    Cassia Blue; "Palm Shadows" — The Vultures; "Sunset Blvd (Reprise)"
+    Cassia Blue; "Palm Shadows" — The Vultures; "Glass Spire (Reprise)"
     — Mara Q.
   - **107.3 The Dock** — garage rock — rust and diesel. Tracks: "Rust
     and Chrome" — Harbor Rats; "Anchor Down" — Salty Dogs; "Night Shift"
     — The Breakers; "Diesel Heart" — Crane Wife.
   - **K-VIBE 91.1** — hip-hop / funk — night cruising. Tracks: "Chrome
-    Dreams" — Lil Vex; "Sunset Blvd" — Mara Q; "Low and Slow" — DJ
+    Dreams" — Lil Vex; "Neon Mile" — Mara Q; "Low and Slow" — DJ
     Tropic; "Kings Fall" — The Vultures.
-  DJ chatter reacts to wanted level and missions ("SAPD is all over
-  Sunset Boulevard tonight, folks — drive safe.").
+  DJ chatter reacts to wanted level and missions ("SAMPD is all over
+  Lantern Boulevard tonight, folks — drive safe.").
 - Sound palette (engine, siren, gunshots, ambience, UI): Engine — sawtooth
   + lowpass, pitch tied to speed. Siren — square wave alternating 720/940
   Hz. Gunshots — noise burst + fast envelope. Ambience — waves and gulls
@@ -305,7 +308,7 @@ give +5% mission pay (looking the part).
   simple geometric shapes, never emoji.
 - Tone of UI text: short, confident, street-smart. Objectives are verbs
   ("Steal the car.", "Lose the police."). Failure is blunt but fair
-  ("BUSTED — The SAPD got you. $100 bail."). No begging, no purple prose.
+  ("BUSTED — The SAMPD got you. $100 bail."). No begging, no purple prose.
 
 ## 12. Fictional brands (billboards, shops, food, cars)
 List 10+ made-up brand names with slogans and colors. No real brands.
@@ -315,9 +318,9 @@ List 10+ made-up brand names with slogans and colors. No real brands.
 4. **DONUT DRIVE** — "Fresh 24 Hours" — orange / white.
 5. **SURF SHOP** — "Boards · Wax · Beach Gear" — teal / sand.
 6. **NEON NAILS** — "Salon & Spa" — purple / pink.
-7. **LUZ AUTO** — "We Fix Anything" — teal / white.
-8. **PEARL DINER** — "Pie at 2 AM" — cream / red.
-9. **WAVE 98.7** — "Sunset FM" — orange-pink gradient.
+7. **PALM & PISTON** — "We Fix Anything" — teal / white.
+8. **MABEL'S PIE HOUSE** — "Pie at 2 AM" — cream / red.
+9. **NEON TIDE 102.5** — "Ride the Glow" — orange-pink gradient.
 10. **SLICE RUNNER** — "Pizza in 20 or Free" — red / yellow.
 11. **HARBOR RATS COFFEE** — "Strong as the Tide" — brown / cream.
 12. **VELVET ROPE** — "Dress Like You Own It" — gold / black.
@@ -329,12 +332,18 @@ List 10+ made-up brand names with slogans and colors. No real brands.
 1. **A living sunset.** A full day/night cycle where the whole city
    re-lights: windows glow, neon fires up, wet roads sheen under the
    lamps. Visible in every screenshot, not a static backdrop.
-2. **District reputation with real perks.** Standing per district changes
-   police behaviour, prices, payouts and unlocks — the map itself is the
-   progression system.
+2. **Dynamic rain and storms.** Weather rolls in off the bay — rain,
+   lightning, thunder, and wet roads that mirror the neon. Storms change
+   driving grip, visibility, and the whole look of the city.
 3. **The Canal Lift Bridge stunt escape.** A signature set-piece: a
    3-star chase that ends in jumping a raised bridge. One moment, built
    to be screenshotted.
-4. **Procedural radio that reacts.** Three stations of original synth
-   tracks plus DJ chatter that comments on wanted level, missions and the
-   time of day — the city talks back.
+4. **Garage car customization.** At Palm & Piston, rebuild your ride —
+   paint, wheels, body kits, spoilers, and performance tuning that
+   changes how the car drives. Your car, your signature.
+5. **Photo mode (stretch, optional).** Freeze the action, move the
+   camera, tune the sunset, and frame the shot — built for the
+   screenshots that decide the judging. Not part of the core 4.
+Note: district reputation (standing perks in §2, levels in §9) remains a
+required system — it is no longer listed as a differentiator. The
+3-station procedural radio (§10) also remains a required feature.
