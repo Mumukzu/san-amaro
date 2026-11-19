@@ -102,6 +102,38 @@ Tick an item only after it is verified in the running game via Playwright.
       Before shots backed up to mockups/shots/before/ (old screenshots/ kept
       until step 5 replaces them with verified-better ones).
 
+## Step 2 — CITY DENSITY (Mu 19 Nov ~14:14, order #2)
+- [x] Counts: traffic 12 -> 20, peds 24 -> 40, parked 6 -> 14 (config.js).
+      Parked cars got 14 distinct curb spots (was 6 spots wrapping).
+- [x] Characters made cheaper so 40 peds fit: torso+head+hair merged into
+      ONE vertex-coloured body mesh (player.js mergeColored) — 5 meshes per
+      character instead of 7. Arms skip the shadow pass, car cabins skip
+      the shadow pass (body gives the ground shadow). Peds biased to the
+      central blocks (65% plaza/boulevard) so the streets the cameras see
+      feel alive.
+- [x] Lamps on every main road (boulevards z=+/-50, avenues x=+/-50, ~70
+      lamps; instanced pole/head/pool = 3 calls total). Palms on every
+      main road (~82), fuller crowns (10 fronds, 4.2x1.8 planes).
+- [x] Street furniture: hydrants 8 -> 16, bins 12 -> 24, benches 8 -> 12,
+      billboards 2 -> 4 (added Palm & Piston, Mabel's Pie House), 2 bus
+      stops (merged shelter + lit BUS sign).
+- [x] Setbacks: strip malls got a stepped parapet, dingbats a rooftop
+      room (both merged into the building mesh, 0 extra calls). Rooftop
+      antennas + blinking red beacons on the 12 tallest roofs (pulse via
+      setWindowGlow + state.time).
+- [x] Night sky bug fixed: stars were a sunIntensity<1 test that broke
+      when moonlight hit 1.0 — no stars AND bright clouds all night (pale
+      sky). Stars are a preset property now (night: 1), kept below the
+      bloom threshold so they stay points, not blobs.
+- [x] Playwright QA, 3 rounds: r1 (dense, but 363 calls / night sky pale),
+      r2 (shadow-pass trim: arms + cabins skip shadows, 295 calls shot 3;
+      glass mullion lightened, plaza softened), r3 (night sky fixed, stars
+      as points). 0 console errors on all shots. Draw calls: shot 3 = 295
+      total (scene ~201, within the 250 guide), shot 1 wide view = 368
+      total (scene ~274, over the guide in the worst orbit view — accepted:
+      the density is the point, and 274 scene calls is still light for
+      desktop Chrome). Tris 58-65K (budget <=1.5M). game/ ~1.0 MB.
+
 ## Notes
 - Dead 2D starter code (game/src/render.js, random.js) KEPT in place, NOT
   deleted — Mu 19 Nov ~13:39: never delete any file that is part of the

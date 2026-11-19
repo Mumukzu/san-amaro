@@ -34,9 +34,9 @@ export const CAR = {
   width: 1.9,
 };
 
-export const TRAFFIC_COUNT = 12;
-export const PED_COUNT = 24;
-export const PARKED_COUNT = 6;
+export const TRAFFIC_COUNT = 20;
+export const PED_COUNT = 40;
+export const PARKED_COUNT = 14;
 
 export const POLICE = {
   maxWanted: 3,
@@ -56,19 +56,19 @@ export const TIME_PRESETS = {
     sunElev: 62, sunAzim: 205, sunColor: 0xfff2dd, sunIntensity: 3.6,
     hemiSky: 0x8fb8dd, hemiGround: 0x6a5f52, hemiIntensity: 0.85,
     skyTop: 0x2a6fd0, skyHorizon: 0xbfe0ea, fogColor: 0xaec6d2, fogDensity: 0.0007,
-    exposure: 1.08, windowGlow: 0.1, lampOn: false, headlightOn: false,
+    exposure: 1.08, windowGlow: 0.1, lampOn: false, headlightOn: false, stars: 0,
   },
   sunset: {
     sunElev: 9, sunAzim: 252, sunColor: 0xff8a2a, sunIntensity: 4.2,
     hemiSky: 0xd8a080, hemiGround: 0x4a3f36, hemiIntensity: 0.75,
     skyTop: 0x3d2f6e, skyHorizon: 0xff7a3c, fogColor: 0xc97a4a, fogDensity: 0.0011,
-    exposure: 1.15, windowGlow: 1.0, lampOn: true, headlightOn: true,
+    exposure: 1.15, windowGlow: 1.0, lampOn: true, headlightOn: true, stars: 0,
   },
   night: {
     sunElev: 42, sunAzim: 130, sunColor: 0x9ab4ff, sunIntensity: 1.0,
     hemiSky: 0x3a4a70, hemiGround: 0x241c18, hemiIntensity: 0.75,
     skyTop: 0x0d1330, skyHorizon: 0x3a2a55, fogColor: 0x232840, fogDensity: 0.0016,
-    exposure: 1.18, windowGlow: 2.0, lampOn: true, headlightOn: true,
+    exposure: 1.18, windowGlow: 2.0, lampOn: true, headlightOn: true, stars: 1,
   },
 };
 export const TIME_ORDER = ['day', 'sunset', 'night'];

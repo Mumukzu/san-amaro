@@ -53,9 +53,10 @@ void main() {
   if (starAmount > 0.001 && d.y > 0.03) {
     vec3 cell = floor(d * 160.0);
     float hsh = hash13(cell);
-    if (hsh > 0.997) {
+    if (hsh > 0.996) {
       float tw = 0.6 + 0.4 * sin(hsh * 40.0);
-      col += vec3(0.9, 0.95, 1.0) * starAmount * tw * smoothstep(0.997, 1.0, hsh);
+      // Kept below the bloom threshold so stars stay points, not blobs.
+      col += vec3(0.9, 0.95, 1.0) * starAmount * tw * smoothstep(0.996, 1.0, hsh) * 0.8;
     }
   }
   gl_FragColor = vec4(col, 1.0);
@@ -161,6 +162,7 @@ export class Sky {
       headlightOn: this.headlightOn ?? true,
       sunElev: this.sunElev ?? 13,
       sunAzim: this.sunAzim ?? 252,
+      stars: this.stars ?? 0,
     };
   }
 
@@ -176,7 +178,11 @@ export class Sky {
     this.uniforms.topColor.value.copy(s.skyTop);
     this.uniforms.horizonColor.value.copy(s.skyHorizon);
     this.uniforms.sunColor.value.copy(s.sunColor);
-    this.uniforms.starAmount.value = s.sunElev > 30 && s.sunIntensity < 1 ? 1 : 0;
+    // Stars are a preset property now (the old sunIntensity<1 test broke
+    // when night moonlight was raised to 1.0: no stars, and the bright
+    // clouds rendered all night, washing the sky pale).
+    this.uniforms.starAmount.value = s.stars ?? 0;
+    this.stars = s.stars ?? 0;
     this.sun.color.copy(s.sunColor);
     this.sun.intensity = s.sunIntensity;
     this.hemi.color.copy(s.hemiSky);
@@ -214,6 +220,7 @@ export class Sky {
         headlightOn: t > 0.5 ? this.to.headlightOn : this.from.headlightOn,
         sunElev: this.from.sunElev + (this.to.sunElev - this.from.sunElev) * t,
         sunAzim: this.from.sunAzim + (this.to.sunAzim - this.from.sunAzim) * t,
+        stars: this.from.stars + (this.to.stars - this.from.stars) * t,
       };
       this.writeState(s);
       if (this.blend >= 1) this.bakeEnvironment();

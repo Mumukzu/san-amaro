@@ -6,6 +6,7 @@
 // tanks, antennas) are InstancedMeshes shared across all roofs.
 import * as THREE from 'three';
 import { WORLD } from './config.js';
+import { state } from './state.js';
 import { aabb, canvasTexture, mergeGeoms, mulberry32, pick, rand, signTexture, texturedBox } from './utils.js';
 
 // ---- Facade textures (256x256 = one 10x10 m tile) ----
@@ -38,7 +39,7 @@ function glassFacade(rng) {
       // Glass towers read as a dark mullion grid with BRIGHT reflective
       // panes — a flat blue gradient was a giant blue slab. The panes are
       // light sky-blue with a white highlight streak; the grid is dark.
-      ctx.fillStyle = '#3a4a58'; ctx.fillRect(0, 0, 256, 256);
+      ctx.fillStyle = '#4a5a68'; ctx.fillRect(0, 0, 256, 256);
       for (const w of lit) {
         const g = ctx.createLinearGradient(w.x, w.y, w.x, w.y + w.h);
         if (w.isLit) {
@@ -316,6 +317,11 @@ export function buildBuildings(scene, layout) {
       const w = 62; const d = 18; const h = 7;
       const parts = [texturedBox(w, h, d, 10)];
       parts[0].matrix.setPosition(0, h / 2, 0);
+      // Stepped parapet: a smaller box on the roof so the strip mall has a
+      // setback silhouette instead of a flat slab. (The roof slab stays on
+      // the main roof; the parapet rises through it.)
+      parts.push(texturedBox(w * 0.55, 1.4, d * 0.7, 10));
+      parts[1].matrix.setPosition(0, h + 0.7, 0);
       addBuilding(parts, mats.shop, cx, cz, w / 2, d / 2, { w, d, y: h });
       // Fascia sign on the front face (facing the boulevard, z+ side).
       const [text, sub, bg, fg] = SHOP_SIGNS[signIndex % SHOP_SIGNS.length];
@@ -340,6 +346,10 @@ export function buildBuildings(scene, layout) {
         }
         parts.push(texturedBox(w, h - 3, d, 10));
         parts[parts.length - 1].matrix.setPosition(0, 3 + (h - 3) / 2, 0);
+        // Rooftop room (setback) so the dingbat has a stepped silhouette.
+        // (The roof slab stays on the main roof; the room rises through it.)
+        parts.push(texturedBox(9, 2.4, 8, 10));
+        parts[parts.length - 1].matrix.setPosition(-12, h + 1.2, 0);
         addBuilding(parts, mats.brick, cx, cz + oz, w / 2, d / 2, { w, d, y: h });
       }
     }
@@ -371,9 +381,32 @@ export function buildBuildings(scene, layout) {
   acMesh.castShadow = true; tankMesh.castShadow = true;
   scene.add(acMesh); scene.add(tankMesh);
 
+  // Rooftop antennas + blinking red beacons on the tallest roofs (the
+  // skyline reads at night because the beacons pulse).
+  const antennaSpots = roofSpots.filter((s) => s.y > 20).slice(0, 12);
+  const antGeo = new THREE.CylinderGeometry(0.08, 0.12, 9, 6);
+  const antMat = new THREE.MeshStandardMaterial({ color: 0x3a3f45, roughness: 0.6, metalness: 0.7 });
+  const antMesh = new THREE.InstancedMesh(antGeo, antMat, antennaSpots.length);
+  const beaconGeo = new THREE.SphereGeometry(0.35, 8, 6);
+  const beaconMat = new THREE.MeshStandardMaterial({
+    color: 0x330000, emissive: 0xff2020, emissiveIntensity: 1.5,
+    roughness: 0.4, metalness: 0,
+  });
+  const beaconMesh = new THREE.InstancedMesh(beaconGeo, beaconMat, antennaSpots.length);
+  antennaSpots.forEach((spot, i) => {
+    m4.makeRotationY(0);
+    m4.setPosition(spot.x, spot.y + 4.5, spot.z);
+    antMesh.setMatrixAt(i, m4);
+    m4.setPosition(spot.x, spot.y + 9.2, spot.z);
+    beaconMesh.setMatrixAt(i, m4);
+  });
+  scene.add(antMesh); scene.add(beaconMesh);
+
   function setWindowGlow(v) {
     for (const m of Object.values(mats)) m.emissiveIntensity = v;
     for (const m of signMats) m.emissiveIntensity = 0.15 + v * 0.9;
+    // Beacons pulse slowly (all together — one material, one call).
+    beaconMat.emissiveIntensity = 0.6 + 1.4 * (0.5 + 0.5 * Math.sin(state.time * 2.2));
   }
 
   return { colliders, setWindowGlow };

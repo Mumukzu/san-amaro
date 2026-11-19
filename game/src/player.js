@@ -6,13 +6,65 @@ import { PLAYER } from './config.js';
 import { angleLerp, circleVsAABB, clamp } from './utils.js';
 import { state } from './state.js';
 
-function limb(w, h, d, color, px, py, pz, pivotY) {
+function limb(w, h, d, color, px, py, pz, pivotY, castsShadow = true) {
   const geo = new THREE.BoxGeometry(w, h, d);
   geo.translate(0, -h / 2 + pivotY, 0);
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 }));
   mesh.position.set(px, py, pz);
-  mesh.castShadow = true;
+  // Arms skip the shadow pass (thin, negligible silhouette) — 2 fewer
+  // shadow calls per pedestrian, which is what keeps 40 peds affordable.
+  // Legs keep their shadows: they define the person's ground silhouette.
+  mesh.castShadow = castsShadow;
   return mesh;
+}
+
+function mergeColored(parts) {
+  // Merge several geometries, each tinted one flat colour, into a single
+  // vertex-coloured geometry (one material, one draw call). The character
+  // body (torso + head + hair) is 1 call instead of 3 — that is what makes
+  // 40 pedestrians affordable in draw calls. The limbs stay separate
+  // meshes because they rotate for the walk animation.
+  let vCount = 0; let iCount = 0;
+  for (const p of parts) {
+    vCount += p.geo.attributes.position.count;
+    iCount += p.geo.index.count;
+  }
+  const pos = new Float32Array(vCount * 3);
+  const nor = new Float32Array(vCount * 3);
+  const uv = new Float32Array(vCount * 2);
+  const col = new Float32Array(vCount * 3);
+  const idx = new Uint32Array(iCount);
+  const v = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  const nm = new THREE.Matrix3();
+  const c = new THREE.Color();
+  let vo = 0; let io = 0;
+  for (const p of parts) {
+    const g = p.geo;
+    m.copy(p.matrix || new THREE.Matrix4());
+    nm.getNormalMatrix(m);
+    c.set(p.color);
+    const pa = g.attributes.position; const na = g.attributes.normal; const ua = g.attributes.uv;
+    for (let i = 0; i < pa.count; i += 1) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(m);
+      pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+      n.fromBufferAttribute(na, i).applyMatrix3(nm).normalize();
+      nor[(vo + i) * 3] = n.x; nor[(vo + i) * 3 + 1] = n.y; nor[(vo + i) * 3 + 2] = n.z;
+      uv[(vo + i) * 2] = ua.getX(i); uv[(vo + i) * 2 + 1] = ua.getY(i);
+      col[(vo + i) * 3] = c.r; col[(vo + i) * 3 + 1] = c.g; col[(vo + i) * 3 + 2] = c.b;
+    }
+    const ix = g.index;
+    for (let i = 0; i < ix.count; i += 1) idx[io + i] = ix.getX(i) + vo;
+    vo += pa.count; io += ix.count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
 }
 
 export function buildCharacter(opts = {}) {
@@ -23,27 +75,22 @@ export function buildCharacter(opts = {}) {
   const group = new THREE.Group();
   const legL = limb(0.22, 0.85, 0.24, pants, -0.14, 0.88, 0, 0.85);
   const legR = limb(0.22, 0.85, 0.24, pants, 0.14, 0.88, 0, 0.85);
-  const torso = new THREE.Mesh(
-    new THREE.BoxGeometry(0.58, 0.62, 0.32),
-    new THREE.MeshStandardMaterial({ color: jacket, roughness: 0.8, metalness: 0 }),
+  // One vertex-coloured body mesh: torso + head + hair (they move together).
+  const bodyGeo = mergeColored([
+    { geo: new THREE.BoxGeometry(0.58, 0.62, 0.32), matrix: new THREE.Matrix4().setPosition(0, 1.2, 0), color: jacket },
+    { geo: new THREE.SphereGeometry(0.21, 14, 12), matrix: new THREE.Matrix4().setPosition(0, 1.68, 0), color: skin },
+    { geo: new THREE.SphereGeometry(0.215, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), matrix: new THREE.Matrix4().setPosition(0, 1.71, -0.01), color: hair },
+  ]);
+  const body = new THREE.Mesh(
+    bodyGeo,
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 }),
   );
-  torso.position.set(0, 1.2, 0);
-  torso.castShadow = true;
-  const armL = limb(0.17, 0.62, 0.18, jacket, -0.38, 1.44, 0, 0.62);
-  const armR = limb(0.17, 0.62, 0.18, jacket, 0.38, 1.44, 0, 0.62);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.21, 14, 12),
-    new THREE.MeshStandardMaterial({ color: skin, roughness: 0.7, metalness: 0 }),
-  );
-  head.position.set(0, 1.68, 0);
-  head.castShadow = true;
-  const hairMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.215, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    new THREE.MeshStandardMaterial({ color: hair, roughness: 0.95, metalness: 0 }),
-  );
-  hairMesh.position.set(0, 1.71, -0.01);
-  group.add(legL, legR, torso, armL, armR, head, hairMesh);
-  return { group, legL, legR, armL, armR, torso, head };
+  body.castShadow = true;
+  const armL = limb(0.17, 0.62, 0.18, jacket, -0.38, 1.44, 0, 0.62, false);
+  const armR = limb(0.17, 0.62, 0.18, jacket, 0.38, 1.44, 0, 0.62, false);
+  group.add(legL, legR, body, armL, armR);
+  // torso/head both point at the merged body (the walk bob moves it as one).
+  return { group, legL, legR, armL, armR, torso: body, head: body };
 }
 
 export class Player {
@@ -115,7 +162,10 @@ export class Player {
     this.parts.legR.rotation.x = -s * swing;
     this.parts.armL.rotation.x = -s * swing * 0.8;
     this.parts.armR.rotation.x = s * swing * 0.8;
-    this.parts.torso.position.y = 1.2 + Math.abs(Math.cos(this.walkPhase)) * 0.04 * swing;
+    // Walk bob: the merged body (torso+head+hair) bobs as one piece; the
+    // 1.2 m torso height is baked into its geometry, so only the bob offset
+    // is applied here.
+    this.parts.torso.position.y = Math.abs(Math.cos(this.walkPhase)) * 0.04 * swing;
     if (this.speed < 0.2) {
       this.parts.legL.rotation.x *= 0.2;
       this.parts.legR.rotation.x *= 0.2;

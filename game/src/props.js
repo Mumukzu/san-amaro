@@ -4,7 +4,7 @@
 // Original brand names only; nothing from any commercial game.
 import * as THREE from 'three';
 import { WORLD } from './config.js';
-import { aabb, canvasTexture, mulberry32, rand, signTexture } from './utils.js';
+import { aabb, canvasTexture, mergeGeoms, mulberry32, rand, signTexture, texturedBox } from './utils.js';
 
 function frondTexture() {
   return canvasTexture(128, 128, (ctx) => {
@@ -95,10 +95,17 @@ export function buildProps(scene) {
   const lampHeadMats = [];
   const poolMats = [];
 
-  // ---- Street lamps along the boulevard (z = 50) and the plaza ----
+  // ---- Street lamps along every main road (boulevards z = +/-50 and the
+  // north-south avenues x = +/-50), plus the plaza. Instanced (pole / head /
+  // pool = 3 draw calls total), so more lamps cost nothing per frame. ----
   const lampPos = [];
   for (let x = -240; x <= 240; x += 48) {
     lampPos.push([x, 50 - 11]); lampPos.push([x + 24, 50 + 11]);
+    lampPos.push([x, -50 - 11]); lampPos.push([x + 24, -50 + 11]);
+  }
+  for (let z = -240; z <= 240; z += 48) {
+    lampPos.push([50 - 11, z]); lampPos.push([50 + 11, z + 24]);
+    lampPos.push([-50 - 11, z]); lampPos.push([-50 + 11, z + 24]);
   }
   for (const [x, z] of [[-30, -30], [30, -30], [-30, 30], [30, 30]]) lampPos.push([x, z]);
   const poleGeo = new THREE.CylinderGeometry(0.09, 0.13, 7, 8);
@@ -137,10 +144,16 @@ export function buildProps(scene) {
   poles.castShadow = true;
   scene.add(poles); scene.add(heads); scene.add(pools);
 
-  // ---- Palm trees: boulevard, plaza ring, strip-mall fronts ----
+  // ---- Palm trees: both boulevards, the avenues, the plaza ring,
+  // strip-mall fronts. Instanced trunks + fronds (2 draw calls total). ----
   const palmPos = [];
   for (let x = -230; x <= 230; x += 40) {
     palmPos.push([x, 50 - 10.5]); palmPos.push([x + 20, 50 + 10.5]);
+    palmPos.push([x, -50 - 10.5]); palmPos.push([x + 20, -50 + 10.5]);
+  }
+  for (let z = -230; z <= 230; z += 40) {
+    palmPos.push([50 - 10.5, z]); palmPos.push([50 + 10.5, z + 20]);
+    palmPos.push([-50 - 10.5, z]); palmPos.push([-50 + 10.5, z + 20]);
   }
   for (let a = 0; a < 8; a += 1) {
     const ang = (a / 8) * Math.PI * 2;
@@ -151,12 +164,12 @@ export function buildProps(scene) {
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a7a5e, roughness: 0.9, metalness: 0 });
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, palmPos.length);
   const frondTex = frondTexture();
-  const frondGeo = new THREE.PlaneGeometry(3.4, 1.5);
+  const frondGeo = new THREE.PlaneGeometry(4.2, 1.8);
   const frondMat = new THREE.MeshStandardMaterial({
     map: frondTex, alphaTest: 0.5, side: THREE.DoubleSide,
     roughness: 0.85, metalness: 0, color: 0x9fd4a0,
   });
-  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, palmPos.length * 8);
+  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, palmPos.length * 10);
   let fi = 0;
   palmPos.forEach(([x, z], i) => {
     const h = rand(rng, 8, 12);
@@ -164,8 +177,8 @@ export function buildProps(scene) {
     dummy.rotation.set(0, rng() * Math.PI, (rng() - 0.5) * 0.06);
     dummy.scale.set(1, h / 9, 1);
     dummy.updateMatrix(); trunks.setMatrixAt(i, dummy.matrix);
-    for (let k = 0; k < 8; k += 1) {
-      const a = (k / 8) * Math.PI * 2 + rng() * 0.3;
+    for (let k = 0; k < 10; k += 1) {
+      const a = (k / 10) * Math.PI * 2 + rng() * 0.3;
       dummy.position.set(x + Math.sin(a) * 1.3, h - 0.4, z + Math.cos(a) * 1.3);
       dummy.rotation.order = 'YXZ';
       dummy.rotation.set(-0.65, a, 0);
@@ -181,7 +194,11 @@ export function buildProps(scene) {
   const hydGeo = new THREE.CylinderGeometry(0.28, 0.34, 0.9, 8);
   const hydMat = new THREE.MeshStandardMaterial({ color: 0xc23a2a, roughness: 0.5, metalness: 0.3 });
   const hydPos = [];
-  for (const [x, z] of [[-58, 42], [58, 42], [-58, 58], [58, 58], [-158, 42], [158, 58], [-42, -58], [42, -58]]) hydPos.push([x, z]);
+  for (const [x, z] of [
+    [-58, 42], [58, 42], [-58, 58], [58, 58], [-158, 42], [158, 58],
+    [-42, -58], [42, -58], [-158, -42], [158, -42], [-42, 158], [42, 158],
+    [-142, 142], [142, -142], [-242, 42], [242, -58],
+  ]) hydPos.push([x, z]);
   const hyds = new THREE.InstancedMesh(hydGeo, hydMat, hydPos.length);
   hydPos.forEach(([x, z], i) => {
     dummy.position.set(x, 0.45, z); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
@@ -191,23 +208,35 @@ export function buildProps(scene) {
 
   const benchGeo = new THREE.BoxGeometry(2.4, 0.12, 0.6);
   const benchMat = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.85, metalness: 0 });
-  const benches = new THREE.InstancedMesh(benchGeo, benchMat, 8);
+  const benches = new THREE.InstancedMesh(benchGeo, benchMat, 12);
   for (let i = 0; i < 8; i += 1) {
     const a = (i / 8) * Math.PI * 2;
     dummy.position.set(Math.cos(a) * 22, 0.5, Math.sin(a) * 22);
     dummy.rotation.set(0, -a + Math.PI / 2, 0); dummy.updateMatrix();
     benches.setMatrixAt(i, dummy.matrix);
   }
+  // Four more benches along the boulevard sidewalks.
+  for (let i = 0; i < 4; i += 1) {
+    dummy.position.set(-150 + i * 100, 0.5, 38.5);
+    dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    benches.setMatrixAt(8 + i, dummy.matrix);
+  }
   scene.add(benches);
 
   const binGeo = new THREE.CylinderGeometry(0.4, 0.36, 0.9, 10);
   const binMat = new THREE.MeshStandardMaterial({ color: 0x2a4a3a, roughness: 0.7, metalness: 0.4 });
-  const bins = new THREE.InstancedMesh(binGeo, binMat, 12);
+  const bins = new THREE.InstancedMesh(binGeo, binMat, 24);
   for (let i = 0; i < 12; i += 1) {
     const x = -240 + i * 44;
     dummy.position.set(x, 0.45, i % 2 === 0 ? 38.5 : 61.5);
     dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
     bins.setMatrixAt(i, dummy.matrix);
+  }
+  for (let i = 0; i < 12; i += 1) {
+    const z = -240 + i * 44;
+    dummy.position.set(i % 2 === 0 ? -38.5 : -61.5, 0.45, z);
+    dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    bins.setMatrixAt(12 + i, dummy.matrix);
   }
   scene.add(bins);
 
@@ -215,6 +244,8 @@ export function buildProps(scene) {
   const billboards = [
     { x: 150, z: -50, ry: 0, text: 'NEON COLA', sub: 'Taste the Sunset', bg: '#ff2e88', fg: '#ffffff' },
     { x: -150, z: 50, ry: Math.PI, text: 'PALM DRIVE MOTORS', sub: 'Drive San Amaro', bg: '#123a6a', fg: '#ffd23e' },
+    { x: -150, z: -50, ry: Math.PI, text: "PALM & PISTON", sub: "Nadia's Garage · Tune · Paint · Nitro", bg: '#1f8a8a', fg: '#ffffff' },
+    { x: 150, z: 50, ry: 0, text: "MABEL'S PIE HOUSE", sub: 'Pie All Day · Since 1962', bg: '#c96a1e', fg: '#fff3d0' },
   ];
   for (const b of billboards) {
     const tex = signTexture(b.text, b.sub, b.bg, b.fg, 1024, 320);
@@ -235,6 +266,40 @@ export function buildProps(scene) {
       scene.add(pole);
     }
     colliders.push(aabb(b.x, b.z, 0.5, 0.5));
+  }
+
+  // ---- Bus stops: a merged shelter (roof + posts + back panel, 1 call)
+  // + a lit BUS sign, on the boulevard sidewalks. ----
+  const busStops = [
+    { x: -80, z: 38.5, ry: 0 },
+    { x: 120, z: 61.5, ry: Math.PI },
+  ];
+  const shelterMat = new THREE.MeshStandardMaterial({ color: 0x1f5a5a, roughness: 0.6, metalness: 0.3 });
+  for (const s of busStops) {
+    const roof = texturedBox(4.5, 0.15, 1.8, 10);
+    roof.matrix.setPosition(0, 2.6, 0);
+    const postL = texturedBox(0.15, 2.6, 0.15, 10);
+    postL.matrix.setPosition(-2.1, 1.3, 0.8);
+    const postR = texturedBox(0.15, 2.6, 0.15, 10);
+    postR.matrix.setPosition(2.1, 1.3, 0.8);
+    const back = texturedBox(4.5, 1.2, 0.1, 10);
+    back.matrix.setPosition(0, 1.4, -0.85);
+    const shelter = new THREE.Mesh(mergeGeoms([roof, postL, postR, back]), shelterMat);
+    shelter.position.set(s.x, 0, s.z);
+    shelter.rotation.y = s.ry;
+    shelter.castShadow = true;
+    scene.add(shelter);
+    const signTex = signTexture('BUS', 'San Amaro Transit', '#123a6a', '#ffd23e', 512, 160);
+    const signMat = new THREE.MeshStandardMaterial({
+      map: signTex.map, emissiveMap: signTex.emissive, emissive: 0xffffff, emissiveIntensity: 0.4,
+      roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide,
+    });
+    glowMats.push(signMat);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), signMat);
+    sign.position.set(s.x, 3.1, s.z);
+    sign.rotation.y = s.ry;
+    scene.add(sign);
+    colliders.push(aabb(s.x, s.z, 2.3, 1));
   }
 
   // ---- Freestanding mural walls near the boulevard ----

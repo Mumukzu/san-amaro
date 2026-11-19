@@ -25,8 +25,11 @@ export class Pedestrians {
     this.peds = [];
     const rng = mulberry32(20261119 + 202);
     for (let i = 0; i < PED_COUNT; i += 1) {
-      const bx = pick(rng, WORLD.blockAt);
-      const bz = pick(rng, WORLD.blockAt);
+      // Bias the spawn toward the central blocks (plaza + boulevard): the
+      // streets the cameras see must feel alive, not the empty outer ring.
+      const central = [-100, 0, 100];
+      const bx = rng() < 0.65 ? pick(rng, central) : pick(rng, WORLD.blockAt);
+      const bz = rng() < 0.65 ? pick(rng, central) : pick(rng, WORLD.blockAt);
       const loop = sidewalkLoop(bx, bz);
       const wp = Math.floor(rng() * 4);
       const c = buildCharacter({

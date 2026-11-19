@@ -40,7 +40,7 @@ function drawGround(ctx, rng) {
       const x0 = px(bx - WORLD.blockHalf); const z0 = py(bz + WORLD.blockHalf);
       const w = WORLD.blockHalf * 2 * SCALE;
       if (kind === 'plaza') {
-        ctx.fillStyle = '#8a7558';
+        ctx.fillStyle = '#7a6550';
         ctx.fillRect(x0, z0, w, w);
         // Plaza tiles: checker of warm stone (kept muted — the pale
         // checkerboard read as a chessboard in daylight).
@@ -48,7 +48,7 @@ function drawGround(ctx, rng) {
         for (let i = 0; i < 8; i += 1) {
           for (let j = 0; j < 8; j += 1) {
             if ((i + j) % 2 === 0) {
-              ctx.fillStyle = '#7a6548';
+              ctx.fillStyle = '#72604a';
               ctx.fillRect(x0 + i * t, z0 + j * t, t, t);
             }
           }

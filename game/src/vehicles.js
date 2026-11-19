@@ -99,7 +99,9 @@ export class Vehicles {
     body.castShadow = true;
     group.add(body);
     const cabin = new THREE.Mesh(this.cabinGeo, this.cabinMat);
-    cabin.castShadow = true;
+    // Cabin skips the shadow pass: the body already gives the car its
+    // ground shadow, and 1 fewer shadow call per car keeps traffic cheap.
+    cabin.castShadow = false;
     group.add(cabin);
     // Police light bar: two small boxes that flash red/blue.
     let barR = null; let barB = null;
@@ -138,6 +140,7 @@ export class Vehicles {
 
   spawnParked(rng) {
     // Parked along the boulevard curbs and side streets, ready to steal.
+    // 14 distinct spots (one per parked car — no two cars share a spot).
     const spots = [
       { x: -40, z: 38.5, heading: Math.PI / 2 },
       { x: 20, z: 38.5, heading: Math.PI / 2 },
@@ -145,6 +148,14 @@ export class Vehicles {
       { x: -120, z: 61.5, heading: -Math.PI / 2 },
       { x: -58.5, z: -20, heading: 0 },
       { x: 41.5, z: 120, heading: Math.PI },
+      { x: -40, z: -38.5, heading: Math.PI / 2 },
+      { x: 60, z: -38.5, heading: Math.PI / 2 },
+      { x: -120, z: -61.5, heading: -Math.PI / 2 },
+      { x: 140, z: -61.5, heading: -Math.PI / 2 },
+      { x: 38.5, z: -80, heading: 0 },
+      { x: 61.5, z: 100, heading: Math.PI },
+      { x: -61.5, z: 60, heading: Math.PI },
+      { x: -38.5, z: -140, heading: 0 },
     ];
     for (let i = 0; i < PARKED_COUNT; i += 1) {
       const s = spots[i % spots.length];
