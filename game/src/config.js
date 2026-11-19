@@ -45,6 +45,8 @@ export const POLICE = {
   bustTime: 1.6, // seconds of contact at low speed before busted
   escapeDistance: 90,
   escapeTime: 6,
+  secondCruiserAt: 2, // VICTOR-7 joins the pursuit at 2 stars (a real second
+  // cruiser on the map, not just a dispatch line — slice 3)
 };
 
 // Time-of-day presets. The default is golden hour (sunset): the neon

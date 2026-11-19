@@ -88,12 +88,30 @@ function muralTexture(seed, style) {
   });
 }
 
+// Lane guard: no prop may stand in a driving lane. The palm and lamp rows
+// run along each road's sidewalk offset and cross every perpendicular road,
+// so without this the rows plant palms and lamps on the asphalt at the
+// crossings — the slice-3 cover had a palm dead-centre in the boulevard
+// (props at [39.5, 50], on the z=50 centre line). A point is in a lane
+// when it is within the asphalt half-width (plus a 1 m trunk margin) of
+// ANY road centre line, on either axis. Sidewalk props sit 10.5–11 m off
+// their own road's line, so they survive the guard.
+function inLane(x, z) {
+  const m = WORLD.roadHalf + 1;
+  for (const r of WORLD.roadAt) {
+    if (Math.abs(x - r) < m || Math.abs(z - r) < m) return true;
+  }
+  return false;
+}
+
 export function buildProps(scene) {
   const rng = mulberry32(WORLD.seed + 21);
   const colliders = [];
   const glowMats = []; // materials whose emissiveIntensity follows windowGlow
   const lampHeadMats = [];
   const poolMats = [];
+  let fountainWaterMat = null; // the plaza fountain water: it glows faintly
+  // at night so the fountain reads after dark (slice 3).
 
   // ---- Street lamps along every main road (boulevards z = +/-50 and the
   // north-south avenues x = +/-50), plus the plaza. Instanced (pole / head /
@@ -108,6 +126,11 @@ export function buildProps(scene) {
     lampPos.push([-50 - 11, z]); lampPos.push([-50 + 11, z + 24]);
   }
   for (const [x, z] of [[-30, -30], [30, -30], [-30, 30], [30, 30]]) lampPos.push([x, z]);
+  // The rows cross every perpendicular road: drop any lamp the rows
+  // planted on the asphalt at a crossing (16 lamps, e.g. [39, 48]).
+  for (let i = lampPos.length - 1; i >= 0; i -= 1) {
+    if (inLane(lampPos[i][0], lampPos[i][1])) lampPos.splice(i, 1);
+  }
   const poleGeo = new THREE.CylinderGeometry(0.09, 0.13, 7, 8);
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x2f3338, roughness: 0.55, metalness: 0.6 });
   const poles = new THREE.InstancedMesh(poleGeo, poleMat, lampPos.length);
@@ -161,6 +184,12 @@ export function buildProps(scene) {
     palmPos.push([Math.cos(ang) * 30, Math.sin(ang) * 30]);
   }
   for (const [x, z] of [[-230, 8], [-210, 8], [210, 8], [230, 8], [-230, -8], [210, -8]]) palmPos.push([x, z]);
+  // The rows cross every perpendicular road: drop any palm the rows
+  // planted on the asphalt at a crossing (16 palms, e.g. [39.5, 50] —
+  // the slice-3 cover's dead-centre palm).
+  for (let i = palmPos.length - 1; i >= 0; i -= 1) {
+    if (inLane(palmPos[i][0], palmPos[i][1])) palmPos.splice(i, 1);
+  }
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 9, 7);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a7a5e, roughness: 0.9, metalness: 0 });
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, palmPos.length);
@@ -216,9 +245,11 @@ export function buildProps(scene) {
     dummy.rotation.set(0, -a + Math.PI / 2, 0); dummy.updateMatrix();
     benches.setMatrixAt(i, dummy.matrix);
   }
-  // Four more benches along the boulevard sidewalks.
+  // Four more benches along the boulevard sidewalks. x = ±50 would land
+  // in the north-south avenues' driving lanes, so the middle two sit at
+  // ±40 instead (on the sidewalk, 10 m off the avenue centre lines).
   for (let i = 0; i < 4; i += 1) {
-    dummy.position.set(-150 + i * 100, 0.5, 38.5);
+    dummy.position.set([-150, -40, 40, 150][i], 0.5, 38.5);
     dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
     benches.setMatrixAt(8 + i, dummy.matrix);
   }
@@ -388,8 +419,9 @@ export function buildProps(scene) {
     // top face before, so the fountain read as a white disc.
     const water = new THREE.Mesh(
       new THREE.CircleGeometry(11.2, 24),
-      new THREE.MeshStandardMaterial({ color: 0x3f7a9a, roughness: 0.05, metalness: 0.1, envMapIntensity: 1.5 }),
+      new THREE.MeshStandardMaterial({ color: 0x3f7a9a, roughness: 0.05, metalness: 0.1, envMapIntensity: 1.5, emissive: 0x1a4a5a, emissiveIntensity: 0 }),
     );
+    fountainWaterMat = water.material;
     water.rotation.x = -Math.PI / 2;
     water.position.set(0, 1.12, 0);
     scene.add(water);
@@ -415,6 +447,9 @@ export function buildProps(scene) {
     for (const m of glowMats) m.emissiveIntensity = 0.15 + windowGlow * 0.9;
     for (const m of lampHeadMats) m.emissiveIntensity = lampOn ? 2.6 : 0;
     for (const m of poolMats) m.opacity = lampOn ? 0.85 : 0;
+    // The plaza fountain water glows faintly at night (its teal catches
+    // the lamp light) and stays flat by day.
+    if (fountainWaterMat) fountainWaterMat.emissiveIntensity = lampOn ? 0.5 : 0;
   }
 
   return { colliders, setGlow };

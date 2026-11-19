@@ -478,13 +478,17 @@ function updatePanels() {
   pol.style.display = state.wanted > 0 ? 'block' : 'none';
   if (state.wanted > 0) {
     // BAY-12 is the real cruiser on scene (PURSUIT + live distance).
-    // VICTOR-7 and AIR-1 are dispatch states, not units on the map: they
-    // read EN ROUTE once the heat is high enough, STANDBY below that.
-    // Their distance stays "—" — there is no second cruiser to measure.
+    // VICTOR-7 is a real second cruiser at 2+ stars (slice 3) — its live
+    // distance shows once it exists; AIR-1 stays a dispatch state, not a
+    // unit on the map, so its distance stays "—".
+    const p = state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
     if (police.cruiser) {
-      const p = state.inCar && state.vehicle ? state.vehicle.pos : player.pos;
       const d = Math.hypot(police.cruiser.car.pos.x - p.x, police.cruiser.car.pos.z - p.z);
       document.getElementById('hud-police-dist').textContent = `${Math.round(d)} m`;
+    }
+    if (police.cruiser2) {
+      const d2 = Math.hypot(police.cruiser2.car.pos.x - p.x, police.cruiser2.car.pos.z - p.z);
+      document.getElementById('hud-police-victor-dist').textContent = `${Math.round(d2)} m`;
     }
     const victor = document.getElementById('hud-police-victor-badge');
     const air = document.getElementById('hud-police-air-badge');

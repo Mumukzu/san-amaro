@@ -14,6 +14,8 @@ export class Camera {
     this.cinePos = new THREE.Vector3(0, 25, 90);
     this.cineTarget = new THREE.Vector3(0, 5, -100);
     this.fov = 62;
+    this.shake = 0; // cinematic handheld shake (metres) — the cover chase
+    // uses a touch of it so the frame feels caught live, not tripod-still.
   }
 
   addOrbit(dx, dy) {
@@ -35,6 +37,13 @@ export class Camera {
     const cam = this.camera;
     if (this.mode === 'cinematic') {
       cam.position.copy(this.cinePos);
+      if (this.shake > 0) {
+        // Handheld micro-jitter: a few centimetres, different every frame,
+        // so a staged shot reads as caught live. Kept tiny — the framing
+        // is staged, only the feel is handheld.
+        cam.position.x += (Math.random() - 0.5) * this.shake;
+        cam.position.y += (Math.random() - 0.5) * this.shake * 0.6;
+      }
       cam.lookAt(this.cineTarget);
       return;
     }

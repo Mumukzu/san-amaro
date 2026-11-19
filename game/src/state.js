@@ -19,6 +19,7 @@ export const state = {
   traffic: [],
   peds: [],
   police: null, // active cruiser object, or null
+  police2: null, // second cruiser (VICTOR-7) at 2+ stars, or null
   colliders: [], // AABBs from world.js / buildings.js
   objective: 'Explore San Amaro',
   marker: null, // { x, z } world position of the current marker, or null

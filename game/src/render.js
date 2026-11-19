@@ -4,8 +4,18 @@
 // rebuilt only when the number changes, so a frame allocates nothing.
 // LEGACY — the 2D "Block Dodger" starter renderer. The game is Three.js now (main.js +
 // the 3D modules); nothing imports this file. Kept in place (no deletes in this repo).
-import { FIELD, FONT, LIVES, PALETTE } from './config.js';
-import { KIND_COIN } from './world.js';
+// Its imports went stale when the 3D config replaced the 2D one (FIELD, LIVES,
+// KIND_COIN no longer exist in config.js/world.js), so the file could not even
+// load. The starter's values are restored locally below (slice 3) so the file
+// is self-contained and importable again — it is still not used by the game.
+const FIELD = { width: 1280, height: 720, groundY: 620 };
+const LIVES = 3;
+const KIND_COIN = 'coin';
+const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+const PALETTE = {
+  sky: '#1a2a4a', ground: '#3a3f45', coin: '#ffd94a',
+  block: '#8a5a3a', player: '#ff2e88', text: '#f4f4f4',
+};
 
 export const SCREEN_TITLE = 'title';
 export const SCREEN_PLAY = 'play';

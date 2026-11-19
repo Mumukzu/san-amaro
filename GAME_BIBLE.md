@@ -132,6 +132,17 @@ vehicles, radio and dialogue live in data files, not in engine code.
    Voice: warm, maternal, with a steel edge ("Eat first. Then we talk.").
    Portrait: behind the diner counter, pie in hand, neon sign glow.
 
+**Character face style (slice 3, Mu's order):** every human in San Amaro
+— Jay AND every NPC pedestrian — is CARTOON-style with a CLEAR, VISIBLE
+FACE: white eyes with dark pupils, eyebrows, a nose, a mouth, and a hair
+cap, all readable at gameplay distance. No blank sphere heads. The face
+is merged into the character's single body mesh (no extra draw calls):
+eyes and pupils as small spheres on the head, brows/nose/mouth as thin
+boxes, the hair as a hemisphere cap. Fleeing pedestrians glance back at
+the pursuit (torso twist) and run with a forward lean, so a face is
+visible even mid-stride. The same face rule applies to the SVG crew and
+dialogue portraits in the HUD.
+
 ## 4. Factions and law
 - Gangs/crews (3+): name, color, territory, behaviour, weapon style:
   - **Chrome Kings** — chrome/silver. Downtown + Docks. Muscle: they

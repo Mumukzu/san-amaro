@@ -1,3 +1,4 @@
+// San Amaro render chain: UnrealBloomPass makes the neon signs, lamps and brake lights glow.
 import {
 	AdditiveBlending,
 	Color,

@@ -1,3 +1,4 @@
+// San Amaro render chain: EffectComposer runs the post-processing passes (bloom + output) each frame.
 import {
 	Clock,
 	HalfFloatType,

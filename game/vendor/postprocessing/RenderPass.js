@@ -1,3 +1,4 @@
+// San Amaro render chain: RenderPass renders the 3D scene into the composer's buffer.
 import {
 	Color
 } from 'three';

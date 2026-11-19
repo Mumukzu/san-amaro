@@ -73,6 +73,29 @@ export class Pedestrians {
     }
   }
 
+  // Frozen stride pose for staging (cover chase, night street): legs
+  // mid-stride, arms pumping, torso leaning forward. phase staggers the
+  // peds so they don't all hit the same step; run = sprint vs walk.
+  poseStride(ped, phase, run = true) {
+    const s = Math.sin(phase);
+    const swing = run ? 0.6 : 0.35;
+    ped.parts.legL.rotation.x = s * swing;
+    ped.parts.legR.rotation.x = -s * swing;
+    ped.parts.armL.rotation.x = -s * swing * 0.8;
+    ped.parts.armR.rotation.x = s * swing * 0.8;
+    ped.parts.torso.rotation.x = run ? 0.12 : 0.04;
+    ped.parts.torso.position.y = 0.02;
+    ped.group.position.copy(ped.pos);
+    ped.group.rotation.y = ped.heading;
+  }
+
+  // A fleeing pose: a sprint stride plus a torso twist toward the pursuit,
+  // so the ped reads as glancing back at the cruisers while running.
+  poseFlee(ped, phase, twist = 0) {
+    this.poseStride(ped, phase, true);
+    ped.parts.torso.rotation.y = twist;
+  }
+
   knockDown(pos) {
     // A car hit someone nearby: the nearest ped falls and the crime is noticed.
     let best = null; let bestD = 3;
@@ -151,6 +174,20 @@ export class Pedestrians {
         p.parts.legR.rotation.x = -s * swing;
         p.parts.armL.rotation.x = -s * swing * 0.8;
         p.parts.armR.rotation.x = s * swing * 0.8;
+        // Glance back: while fleeing, the torso twists toward the police
+        // car (the head is merged into the torso, so the twist turns the
+        // face back at the pursuit). Walking peds stay untwisted.
+        if (fleeing && policePos) {
+          const toPolice = Math.atan2(policePos.x - p.pos.x, policePos.z - p.pos.z);
+          let tdiff = toPolice - p.heading;
+          while (tdiff > Math.PI) tdiff -= Math.PI * 2;
+          while (tdiff < -Math.PI) tdiff += Math.PI * 2;
+          p.parts.torso.rotation.y = clamp(tdiff, -0.6, 0.6) * 0.7;
+          p.parts.torso.rotation.x = 0.12;
+        } else {
+          p.parts.torso.rotation.y = 0;
+          p.parts.torso.rotation.x = 0;
+        }
       }
       p.group.position.set(p.pos.x, p.group.position.y, p.pos.z);
       p.group.rotation.y = p.heading;

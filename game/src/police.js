@@ -12,6 +12,7 @@ export class Police {
     this.scene = scene;
     this.vehicles = vehicles;
     this.cruiser = null;
+    this.cruiser2 = null; // VICTOR-7: a real second cruiser at 2+ stars
     this.bustTimer = 0;
     this.escapeTimer = 0;
     this.escapeStart = 0;
@@ -23,6 +24,13 @@ export class Police {
       state.wanted = next;
       bus.emit('wanted', next);
       if (next === 0) this.despawn();
+      // VICTOR-7 joins at 2 stars and leaves when the heat drops below 2.
+      if (next >= POLICE.secondCruiserAt && !this.cruiser2) {
+        const p = state.inCar && state.vehicle ? state.vehicle.pos : state.player.pos;
+        this.spawnSecondCruiserNear(p);
+      } else if (next < POLICE.secondCruiserAt) {
+        this.despawnSecond();
+      }
     }
   }
 
@@ -53,28 +61,46 @@ export class Police {
     return this.cruiser;
   }
 
-  despawn() {
-    if (!this.cruiser) return;
-    const car = this.cruiser.car;
+  spawnSecondCruiserNear(pos) {
+    // VICTOR-7: the second unit, same spawn rule as BAY-12 (~55 m out on
+    // the nearest road). spawnCruiserNear overwrites this.cruiser, so the
+    // lead cruiser is saved and restored around the call.
+    const lead = this.cruiser;
+    const second = this.spawnCruiserNear(pos);
+    this.cruiser = lead;
+    state.police = lead;
+    this.cruiser2 = second;
+    state.police2 = second;
+    return second;
+  }
+
+  despawnSecond() {
+    if (!this.cruiser2) return;
+    const car = this.cruiser2.car;
     this.scene.remove(car.group);
     this.vehicles.cars = this.vehicles.cars.filter((c) => c !== car);
     state.cars = state.cars.filter((c) => c !== car);
-    this.cruiser = null;
-    state.police = null;
+    this.cruiser2 = null;
+    state.police2 = null;
+  }
+
+  despawn() {
+    if (this.cruiser) {
+      const car = this.cruiser.car;
+      this.scene.remove(car.group);
+      this.vehicles.cars = this.vehicles.cars.filter((c) => c !== car);
+      state.cars = state.cars.filter((c) => c !== car);
+      this.cruiser = null;
+      state.police = null;
+    }
+    this.despawnSecond();
     this.bustTimer = 0;
     this.escapeTimer = 0;
   }
 
-  update(dt, onBusted) {
-    if (state.wanted <= 0) return;
-    const playerPos = state.inCar && state.vehicle ? state.vehicle.pos : state.player.pos;
-    const playerSpeed = state.speed;
-    if (!this.cruiser) {
-      this.spawnCruiserNear(playerPos);
-      return;
-    }
-    const car = this.cruiser.car;
-    // Pursuit: steer toward the player's position with a little lead.
+  // One pursuit steer, shared by BAY-12 and VICTOR-7: chase the player's
+  // position with a little lead, capped at the pursuit speed.
+  pursue(car, dt, playerPos, playerSpeed) {
     const lead = 0.4;
     const tx = playerPos.x + Math.sin(state.player?.heading || 0) * playerSpeed * lead * 0.3;
     const tz = playerPos.z + Math.cos(state.player?.heading || 0) * playerSpeed * lead * 0.3;
@@ -88,6 +114,22 @@ export class Police {
     const throttle = dist > 6 ? 1 : 0.4;
     this.vehicles.drive(car, dt, throttle, steer / 0.55, false, false);
     car.speed = Math.min(car.speed, POLICE.chaseSpeed);
+    return dist;
+  }
+
+  update(dt, onBusted) {
+    if (state.wanted <= 0) return;
+    const playerPos = state.inCar && state.vehicle ? state.vehicle.pos : state.player.pos;
+    const playerSpeed = state.speed;
+    if (!this.cruiser) {
+      this.spawnCruiserNear(playerPos);
+      return;
+    }
+    const car = this.cruiser.car;
+    const dist = this.pursue(car, dt, playerPos, playerSpeed);
+    // VICTOR-7 pursues in parallel once it exists (it spawns in setWanted
+    // at 2 stars, and in staging the shot places it by hand).
+    if (this.cruiser2) this.pursue(this.cruiser2.car, dt, playerPos, playerSpeed);
 
     // Busted: caught at close range while slow.
     if (dist < POLICE.bustDistance && playerSpeed < 3) {

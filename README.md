@@ -90,6 +90,15 @@ Open http://localhost:8080 — click **Continue** (or press Enter).
 night. Real renders live in `screenshots/` (`1-chase.jpg`, `2-mission.jpg`,
 `3-drift.jpg`, `4-night.jpg`; the first by name is the cover).
 
+The cover (shot 1) is a LIVING police chase, not a diorama: the Comet GT
+slides east with BAY-12 and VICTOR-7 (a real second cruiser at 2 stars) in
+the intercept ahead, AIR-1's helicopter and searchlight overhead, tyre
+smoke at the rear wheels, and six pedestrians RUNNING for the sidewalks —
+mid-stride, some glancing back at the cruisers, one close to the camera so
+its cartoon face reads. Shot 2's camera is shifted east so the Glass Spire
+tower clears the wanted stars; shot 3's canal water is deep teal (no pink
+band); shot 4's street foreground is populated with pedestrians and cars.
+
 ## License
 
 MIT — see `LICENSE`.

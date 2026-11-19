@@ -104,7 +104,9 @@ export class HUD {
       this.el.stars.classList.toggle('hot', state.wanted > 0);
       const st = WANTED_STATUS[state.wanted] || WANTED_STATUS[0];
       this.el.wantedStatus.style.display = state.wanted > 0 ? 'inline-block' : 'none';
-      this.el.wantedStatus.textContent = st.text;
+      // At 2+ stars VICTOR-7 is a real second unit on the map — the badge
+      // says so, so the player knows the heat is two cruisers, not one.
+      this.el.wantedStatus.textContent = state.wanted >= 2 ? `${st.text} · 2 UNITS` : st.text;
       this.el.wantedStatus.className = `badge ${st.cls} wanted-status`;
     }
     // Mission panel: stage, overall progress bar, elapsed vs par time.

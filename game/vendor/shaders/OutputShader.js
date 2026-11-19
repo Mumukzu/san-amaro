@@ -1,3 +1,4 @@
+// San Amaro render chain: OutputShader does the final tone-map + sRGB conversion before the frame hits the screen.
 const OutputShader = {
 
 	name: 'OutputShader',

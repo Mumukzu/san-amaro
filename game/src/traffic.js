@@ -60,7 +60,10 @@ export class Traffic {
       const across = Math.abs(dx * fwdZ - dz * fwdX);
       if (across > 6) continue;
       const axis = Math.abs(fwdX) > Math.abs(fwdZ) ? 'ew' : 'ns';
-      if (this.lights.stateFor(axis) !== 'green') return true;
+      // The visual heads run the same cycle offset per intersection
+      // (roads.js) — the AI must read the offset for THIS intersection,
+      // or it stops at a green light and drives through a red one.
+      if (this.lights.stateFor(axis, (inter.x + 50) * 0.06) !== 'green') return true;
     }
     return false;
   }
@@ -99,6 +102,16 @@ export class Traffic {
       // Slow for corners, stop for lights and traffic ahead.
       let targetSpeed = t.cruise * clamp(1 - Math.abs(diff) * 0.4, 0.35, 1);
       if (this.lightAhead(t, intersections) || this.carAhead(t)) targetSpeed = 0;
+      // Yield to the pursuit: traffic within 25 m of a cruiser slows to
+      // 30% of its cruise speed, so the chase reads as a chase and the
+      // cruisers are not stuck behind a queue (slice 3).
+      for (const cop of [state.police?.car, state.police2?.car]) {
+        if (!cop) continue;
+        if (Math.hypot(cop.pos.x - car.pos.x, cop.pos.z - car.pos.z) < 25) {
+          targetSpeed = Math.min(targetSpeed, t.cruise * 0.3);
+          break;
+        }
+      }
       const accel = targetSpeed > car.speed ? 6 : 14;
       car.speed += clamp(targetSpeed - car.speed, -accel * dt, accel * dt);
       const fwdX = Math.sin(car.heading); const fwdZ = Math.cos(car.heading);

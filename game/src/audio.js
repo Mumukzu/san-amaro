@@ -76,7 +76,11 @@ export class AudioSys {
       const siren = state.wanted > 0 && state.phase === 'playing';
       this.sirenGain.gain.setTargetAtTime(siren ? 0.035 : 0, t, 0.2);
       if (siren) {
-        this.sirenOsc.frequency.setTargetAtTime(Math.floor(state.time * 2.2) % 2 === 0 ? 720 : 940, t, 0.05);
+        // The wail climbs with the heat: 2 stars wails higher than 1, 3
+        // stars higher still — the player hears the pursuit escalate
+        // (slice 3).
+        const heat = 1 + (state.wanted - 1) * 0.12;
+        this.sirenOsc.frequency.setTargetAtTime(Math.floor(state.time * 2.2) % 2 === 0 ? 720 * heat : 940 * heat, t, 0.05);
       }
     } catch {
       // Audio must never break the game.

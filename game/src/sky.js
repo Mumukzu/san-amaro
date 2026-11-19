@@ -21,6 +21,8 @@ uniform vec3 horizonColor;
 uniform vec3 sunDir;
 uniform vec3 sunColor;
 uniform float starAmount;
+uniform float time; // drives the star twinkle (slice 3) — the old twinkle
+// was static, so the night stars never shimmered.
 float hash13(vec3 p) {
   p = fract(p * 0.1031);
   p += dot(p, p.zyx + 31.32);
@@ -54,7 +56,7 @@ void main() {
     vec3 cell = floor(d * 160.0);
     float hsh = hash13(cell);
     if (hsh > 0.996) {
-      float tw = 0.6 + 0.4 * sin(hsh * 40.0);
+      float tw = 0.6 + 0.4 * sin(hsh * 40.0 + time * 2.0);
       // Kept below the bloom threshold so stars stay points, not blobs.
       col += vec3(0.9, 0.95, 1.0) * starAmount * tw * smoothstep(0.996, 1.0, hsh) * 0.8;
     }
@@ -83,6 +85,7 @@ export class Sky {
       sunDir: { value: new THREE.Vector3(0, 0.2, -1) },
       sunColor: { value: new THREE.Color(0xff9d42) },
       starAmount: { value: 0 },
+      time: { value: 0 },
     };
     const geo = new THREE.SphereGeometry(850, 32, 16);
     const mat = new THREE.ShaderMaterial({
@@ -200,6 +203,7 @@ export class Sky {
   }
 
   update(dt, playerPos) {
+    this.uniforms.time.value += dt; // the night stars shimmer
     if (this.blend < 1 && this.from && this.to) {
       this.blend = Math.min(1, this.blend + dt / 1.5);
       const t = this.blend * this.blend * (3 - 2 * this.blend); // smoothstep

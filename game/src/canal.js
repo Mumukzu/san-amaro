@@ -14,12 +14,14 @@ function waterTexture() {
   return canvasTexture(256, 256, (ctx, w, h) => {
     ctx.fillStyle = '#0e2a3a';
     ctx.fillRect(0, 0, w, h);
-    // Long horizontal streaks: canal water catching the sky.
+    // Long horizontal streaks: canal water catching the sky. Cool tones
+    // only — the old warm orange streaks are what made the canal read as
+    // a pink sunset band instead of water (slice 3).
     for (let i = 0; i < 90; i += 1) {
       const y = Math.random() * h;
       const len = 20 + Math.random() * 80;
       const x = Math.random() * w;
-      ctx.fillStyle = Math.random() < 0.5 ? 'rgba(120,180,210,0.16)' : 'rgba(255,170,110,0.10)';
+      ctx.fillStyle = Math.random() < 0.7 ? 'rgba(120,180,210,0.16)' : 'rgba(200,230,245,0.12)';
       ctx.fillRect(x, y, len, 1.5);
     }
   }, { repeat: [8, 1] });
@@ -31,8 +33,11 @@ export class Canal {
     // Water: a reflective plane over the canal strip. The texture scrolls
     // slowly (see update) so the water reads as moving, not painted.
     this.waterMat = new THREE.MeshStandardMaterial({
-      map: waterTexture(), color: 0x9ab8c8, roughness: 0.12, metalness: 0.85,
-      envMapIntensity: 1.4,
+      map: waterTexture(), color: 0x4a7a8a, roughness: 0.12, metalness: 0.85,
+      envMapIntensity: 1.2, // lighter teal + stronger sky reflection, so the
+      // canal reads as a luminous water strip beyond the bridge — the
+      // deep-teal fix killed the pink band but left the water nearly
+      // invisible against the dark road (slice 3, round 2).
     });
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(600, CANAL.z1 - CANAL.z0),

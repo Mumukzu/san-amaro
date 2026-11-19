@@ -13,6 +13,14 @@ export function mulberry32(seed) {
 }
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+export function clamp01(v) { return clamp(v, 0, 1); }
+// Smoothstep (the GLSL one, for JS): eases 0→1 across [a, b] with zero
+// slope at both ends — the grade and camera code used hand-rolled versions
+// of this in three places; one helper now (slice 3).
+export function smoothstep(a, b, x) {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+}
 export function lerp(a, b, t) { return a + (b - a) * t; }
 // Frame-rate independent damping factor.
 export function damp(rate, dt) { return 1 - Math.exp(-rate * dt); }

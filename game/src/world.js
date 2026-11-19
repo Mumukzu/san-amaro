@@ -170,6 +170,17 @@ function drawGround(ctx, rng) {
     }
   }
 
+  // Stop lines at the two boulevard intersections (the chase road): a
+  // white bar across each approach lane, just before the crosswalk — the
+  // old ground had crosswalks but no stop lines, so the light
+  // intersections read as unmarked. (Slice 3.) Eastbound traffic drives
+  // the south half (z 50..56.5), westbound the north half (z 43.5..50).
+  ctx.fillStyle = PALETTE.laneWhite;
+  for (const rx of [-50, 50]) {
+    ctx.fillRect(px(rx - 14.6), py(50 + 6.5), 0.6 * SCALE, 6.5 * SCALE); // eastbound approach
+    ctx.fillRect(px(rx + 14), py(50), 0.6 * SCALE, 6.5 * SCALE); // westbound approach
+  }
+
   // Cracks and patches on the asphalt so it never reads as a flat plane.
   for (let i = 0; i < 260; i += 1) {
     const x = rng() * TEX; const y = rng() * TEX;

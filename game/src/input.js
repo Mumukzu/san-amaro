@@ -33,11 +33,16 @@ export function createInput(canvas) {
   });
   window.addEventListener('blur', () => {
     for (const k of Object.keys(keys)) keys[k] = false;
+    // One-shot actions must go too: a press that lands just before the
+    // window loses focus would otherwise fire on return, e.g. an E press
+    // stealing a car the player never meant to take (slice 3).
+    pressed.clear();
     dragging = false;
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       for (const k of Object.keys(keys)) keys[k] = false;
+      pressed.clear();
       dragging = false;
     }
   });

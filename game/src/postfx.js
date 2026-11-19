@@ -74,8 +74,12 @@ export class PostFX {
   }
 
   // Preset-aware bloom: golden hour and night glow more than midday.
+  // The warm grade follows the same curve (strongest at golden hour, a
+  // touch lighter at midday) so the grade and the bloom never disagree
+  // about how golden the frame is (slice 3).
   setPreset(name) {
     this.bloom.strength = name === 'day' ? 0.22 : name === 'night' ? 0.45 : 0.38;
+    this.grade.uniforms.amount.value = name === 'day' ? 0.8 : name === 'night' ? 0.9 : 1.0;
   }
 
   setBloom(on) {

@@ -1,3 +1,4 @@
+// San Amaro render chain: LuminosityHighPassShader isolates the bright pixels the bloom pass glows.
 import {
 	Color
 } from 'three';

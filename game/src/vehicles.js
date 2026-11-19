@@ -427,7 +427,8 @@ export class Vehicles {
         const wx = car.pos.x + Math.cos(car.heading) * rear[0] + Math.sin(car.heading) * rear[2];
         const wz = car.pos.z - Math.sin(car.heading) * rear[0] + Math.cos(car.heading) * rear[2];
         slot.spr.position.set(wx, 0.5, wz);
-        slot.spr.scale.setScalar(0.8);
+        slot.spr.scale.setScalar(1.0); // bigger birth puff — the old 0.8
+        // puffs were too small to read as tyre smoke (slice 3).
         slot.spr.material.opacity = 0.6;
         slot.spr.visible = true;
         slot.age = 0;
@@ -439,7 +440,7 @@ export class Vehicles {
       slot.age += dt;
       const t = slot.age / 1.2;
       if (t >= 1) { slot.spr.visible = false; continue; }
-      slot.spr.scale.setScalar(0.6 + t * 2.2);
+      slot.spr.scale.setScalar(0.8 + t * 2.6); // the puff grows to ~3.4x as it fades
       slot.spr.material.opacity = 0.5 * (1 - t);
     }
     this.wheelMesh.instanceMatrix.needsUpdate = true;

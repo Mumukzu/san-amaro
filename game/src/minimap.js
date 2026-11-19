@@ -70,11 +70,17 @@ export class Minimap {
       c.arc(toX(car.pos.x), toY(car.pos.z), car.parked ? 2.5 : 3, 0, Math.PI * 2);
       c.fill();
     }
-    // Police (flashing red/blue).
+    // Police (flashing red/blue). VICTOR-7 is a second dot when it exists.
     if (state.police) {
       c.fillStyle = Math.floor(state.time * 4) % 2 === 0 ? '#ff2020' : '#2040ff';
       c.beginPath();
       c.arc(toX(state.police.car.pos.x), toY(state.police.car.pos.z), 4.5, 0, Math.PI * 2);
+      c.fill();
+    }
+    if (state.police2) {
+      c.fillStyle = Math.floor(state.time * 4 + 1) % 2 === 0 ? '#ff2020' : '#2040ff';
+      c.beginPath();
+      c.arc(toX(state.police2.car.pos.x), toY(state.police2.car.pos.z), 4, 0, Math.PI * 2);
       c.fill();
     }
     // Player arrow (white, rotated by heading).

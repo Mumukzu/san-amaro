@@ -405,8 +405,10 @@ export function buildBuildings(scene, layout) {
   function setWindowGlow(v) {
     for (const m of Object.values(mats)) m.emissiveIntensity = v;
     for (const m of signMats) m.emissiveIntensity = 0.15 + v * 0.9;
-    // Beacons pulse slowly (all together — one material, one call).
-    beaconMat.emissiveIntensity = 0.6 + 1.4 * (0.5 + 0.5 * Math.sin(state.time * 2.2));
+    // Beacons blink HARD (on/off), not fade smoothly: a real aviation
+    // beacon is a strobe, and the old sine fade read as a breathing glow
+    // rather than a warning light (slice 3).
+    beaconMat.emissiveIntensity = Math.sin(state.time * 2.2) > 0 ? 2.0 : 0.6;
   }
 
   return { colliders, setWindowGlow };

@@ -1,3 +1,4 @@
+// San Amaro render chain: CopyShader copies a buffer to the screen (the composer's final blit).
 /**
  * Full-screen textured quad shader
  */

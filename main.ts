@@ -29,6 +29,9 @@ const shotDir = join(here, 'screenshots');
 if (existsSync(shotDir)) {
   const shots = readdirSync(shotDir).filter((f) => /\.(png|jpe?g)$/i.test(f)).sort();
   if (shots.length > 4) throw new Error(`screenshots/: ${shots.length} shots, max 4`);
+  // The gate needs 3–4 screenshots (the first by name is the cover): a
+  // set of 1–2 would only surface as a refusal at submit, so fail here.
+  if (shots.length < 3) throw new Error(`screenshots/: ${shots.length} shots, need 3 or 4`);
   for (const f of shots) {
     const size = statSync(join(shotDir, f)).size;
     if (size > 262144) throw new Error(`screenshots/${f}: ${size} bytes, max 262144`);

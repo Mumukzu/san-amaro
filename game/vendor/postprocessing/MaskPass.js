@@ -1,3 +1,4 @@
+// San Amaro render chain: MaskPass masks the bloom pass to the glowing (neon/lamp) regions.
 import { Pass } from './Pass.js';
 
 class MaskPass extends Pass {

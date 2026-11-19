@@ -1,0 +1,65 @@
+- generic [active] [ref=e1]:
+  - 'generic "San Amaro: explore the city on foot or by car" [ref=e2]'
+  - status [ref=e3]: San Amaro. Press Enter to start.
+  - generic:
+    - generic:
+      - generic: Chapter 1 · Mission 1
+      - heading "FIRST WHEELS" [level=3]
+      - generic: Drift the bridge approach
+      - generic: Handbrake through the turn — smoke the rears.
+      - generic:
+        - generic: Stage 3 / 3
+        - generic: PAR BONUS +$100 · 00:00 / 02:41
+    - generic:
+      - generic: ☆☆☆☆☆
+      - generic: DAY 1 · 18:24
+      - generic: GOLDEN HOUR
+      - generic: $250
+      - generic:
+        - generic:
+          - generic: NOBODY
+          - generic: 0 / 200 XP
+    - generic:
+      - generic: DOWNTOWN CORE
+      - generic: Lantern Blvd · Street Smart
+    - generic:
+      - generic:
+        - generic: HEALTH
+        - generic: "100"
+      - generic:
+        - generic: ARMOR
+        - generic: "0"
+      - generic:
+        - generic: NADIA
+        - generic: THEO
+        - generic: MARA
+    - generic:
+      - generic:
+        - generic: FISTS
+        - generic: —
+      - generic:
+        - generic: P9 PISTOL
+        - generic: LOCKED
+      - generic:
+        - generic: VIPER SMG
+        - generic: LOCKED
+      - generic:
+        - generic: SCATTERGUN
+        - generic: LOCKED
+      - generic:
+        - generic: LONGSHOT
+        - generic: LOCKED
+    - generic:
+      - heading "COMET GT · SPORTS" [level=4]
+      - generic: 50 km/h
+      - generic:
+        - generic: CONDITION
+        - generic: 100%
+      - generic:
+        - generic: NITRO
+        - generic: 100%
+      - generic:
+        - text: NEON TIDE 102.5
+        - generic: “Neon Horizon” — Midnight Palms
+        - generic: Synthwave · Golden-hour driving# slice 3 (2026-11-19 ~16:30 WIB): cover re-staged as a living chase (2 cruisers, heli, 6 fleeing peds); cartoon faces for all characters; 0 console errors on all 4 shots.
+# slice 4 (2026-11-19 ~17:00 WIB): re-authored slice 3 + cover fix under recording 01a1f330; all 4 screenshots re-shot, 0 console errors.

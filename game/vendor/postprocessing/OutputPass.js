@@ -1,3 +1,4 @@
+// San Amaro render chain: OutputPass applies tone mapping + sRGB at the end of the post chain.
 import {
 	ColorManagement,
 	RawShaderMaterial,

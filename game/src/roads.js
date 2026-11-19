@@ -54,16 +54,20 @@ function makeHead(mats) {
 export class TrafficLights {
   constructor(scene) {
     this.time = 0;
-    this.heads = []; // { lamps, axis }
+    this.heads = []; // { lamps, axis, offset }
     const mats = [];
     for (const inter of LIGHT_INTERSECTIONS) {
+      // Each intersection runs the same 17 s cycle but offset by its x
+      // position, so the two boulevard lights are not perfectly in sync:
+      // traffic flows in a green wave instead of stopping at both (slice 3).
+      const offset = (inter.x + 50) * 0.06; // -50 -> 0 s, +50 -> 6 s
       // One pole per intersection, two heads: one facing the NS traffic,
       // one facing the EW traffic.
       const ns = makeHead(mats);
       ns.group.position.set(inter.x + 9, 0, inter.z + 9);
       ns.group.rotation.y = Math.PI; // face north (toward southbound traffic)
       scene.add(ns.group);
-      this.heads.push({ lamps: ns.lamps, axis: 'ns' });
+      this.heads.push({ lamps: ns.lamps, axis: 'ns', offset });
       // The EW head sits on the opposite corner, not on top of the NS
       // head: two heads at the same spot interpenetrate.
       const ew = makeHead(mats);
@@ -71,13 +75,13 @@ export class TrafficLights {
       ew.group.rotation.y = -Math.PI / 2; // face east
       ew.group.position.y = 0;
       scene.add(ew.group);
-      this.heads.push({ lamps: ew.lamps, axis: 'ew' });
+      this.heads.push({ lamps: ew.lamps, axis: 'ew', offset });
     }
     this.mats = mats;
   }
 
-  stateFor(axis) {
-    const t = this.time % CYCLE;
+  stateFor(axis, offset = 0) {
+    const t = (this.time + offset) % CYCLE;
     if (axis === 'ns') {
       if (t < NS_GREEN) return 'green';
       if (t < NS_GREEN + NS_YELLOW) return 'yellow';
@@ -92,7 +96,7 @@ export class TrafficLights {
   update(dt) {
     this.time += dt;
     for (const head of this.heads) {
-      const s = this.stateFor(head.axis);
+      const s = this.stateFor(head.axis, head.offset);
       const [red, yellow, green] = head.lamps;
       red.emissiveIntensity = s === 'red' ? 2.4 : 0.12;
       yellow.emissiveIntensity = s === 'yellow' ? 2.4 : 0.12;

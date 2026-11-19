@@ -1,3 +1,4 @@
+// San Amaro render chain: ShaderPass runs a full-screen shader (the colour grade) over the frame.
 import {
 	ShaderMaterial,
 	UniformsUtils

@@ -2,7 +2,7 @@
 // locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
 // It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
 // does nothing clever: this is a development convenience, not a web server for the internet.
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +44,24 @@ createServer((request, response) => {
     pathname = decodeURIComponent(url.pathname);
   } catch {
     response.writeHead(400).end('bad request');
+    return;
+  }
+  // /health: a tiny JSON status for the QA scripts and the kit check —
+  // how many game files there are and how big game/ is, so a broken or
+  // bloated build shows up before a screenshot run (slice 3).
+  if (pathname === '/health') {
+    let files = 0;
+    let bytes = 0;
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.isFile()) { files += 1; bytes += statSync(p).size; }
+      }
+    };
+    walk(root);
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ ok: true, gameFiles: files, gameBytes: bytes }));
     return;
   }
   if (pathname.endsWith('/')) pathname += 'index.html';

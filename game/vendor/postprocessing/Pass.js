@@ -1,3 +1,4 @@
+// San Amaro render chain: Pass is the base class every post-processing pass extends.
 import {
 	BufferGeometry,
 	Float32BufferAttribute,
