@@ -40,9 +40,11 @@ function windowTexture(base, lit) {
         const isLit = rand() < lit;
         const px = x * cw + 3, py = y * ch + 4;
         if (isLit) {
-          const warm = pick(['#ffd27a', '#ffb84d', '#ffe9a8', '#ff9a3d']);
+          // Calm amber: dimmed so lit windows read as warm rooms, not a
+          // blazing wall (the old near-white golds blew out under bloom).
+          const warm = pick(['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a']);
           g.fillStyle = warm; g.fillRect(px, py, cw - 6, ch - 8);
-          g.fillStyle = 'rgba(255,255,255,.25)';
+          g.fillStyle = 'rgba(255,255,255,.08)';
           g.fillRect(px, py, cw - 6, 3);
         } else {
           g.fillStyle = 'rgba(8,12,26,.85)'; g.fillRect(px, py, cw - 6, ch - 8);
@@ -170,11 +172,11 @@ function makeLamp(x, z, parent) {
   const arm = box(1.4, 0.1, 0.1, MAT.lampPole, 0.6, 5.1, 0, g);
   const head = box(0.5, 0.14, 0.24, MAT.lampPole, 1.25, 5.05, 0, g);
   const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.18),
-    new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc95e, emissiveIntensity: 2.4 }));
+    new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc95e, emissiveIntensity: 1.6 }));
   bulb.position.set(1.25, 4.96, 0); g.add(bulb);
-  addGlow(g, 1.25, 4.9, 0, 2.6, glowTexWarm);
+  addGlow(g, 1.25, 4.9, 0, 2, glowTexWarm);
   const pool = new THREE.Mesh(new THREE.CircleGeometry(2.6, 20),
-    new THREE.MeshBasicMaterial({ map: glowTexWarm, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 }));
+    new THREE.MeshBasicMaterial({ map: glowTexWarm, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 }));
   pool.rotation.x = -Math.PI / 2; pool.position.set(1.25, 0.06, 0); g.add(pool);
   g.position.set(x, 0, z);
   parent.add(g);
@@ -302,14 +304,14 @@ export function buildCity(scene) {
     const beam = box(2.2, 1.8, 30, MAT.steelDark, sx, 26.5, BRIDGE.z, bridge);
     // red warning light on top
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
-      new THREE.MeshStandardMaterial({ color: 0xff2a1a, emissive: 0xff2a1a, emissiveIntensity: 3 }));
+      new THREE.MeshStandardMaterial({ color: 0xff2a1a, emissive: 0xff2a1a, emissiveIntensity: 2 }));
     lamp.position.set(sx, 28, BRIDGE.z); bridge.add(lamp);
-    addGlow(bridge, sx, 28, BRIDGE.z, 5, glowTexPink);
+    addGlow(bridge, sx, 28, BRIDGE.z, 3.5, glowTexPink);
   }
   // crossbeam sign: "LIFT BRIDGE" in neon
   const signTex = signTexture('LIFT BRIDGE', '#22e6ff', '#0d1520');
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(11, 2.75),
-    new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 1.6, transparent: true }));
+    new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 1.1, transparent: true }));
   sign.position.set(0, 24.5, BRIDGE.z + 15.2); bridge.add(sign);
   // cables (thin cylinders, diagonal)
   for (const sx of [-8.5, 8.5]) {
@@ -321,11 +323,14 @@ export function buildCity(scene) {
   refs.bridge = bridge;
 
   // ---- buildings (blocks) ----
+  // Fewer lit windows (was 0.4-0.6): the old density made whole facades
+  // blaze. ~1 in 3 windows lit now, so buildings read as dark masses
+  // with scattered warm rooms.
   const facades = [
-    { base: '#3a4a63', lit: 0.55 }, { base: '#5a4632', lit: 0.45 },
-    { base: '#6b3a44', lit: 0.5 }, { base: '#2f3a4a', lit: 0.6 },
-    { base: '#7a6a55', lit: 0.4 }, { base: '#4a3a5a', lit: 0.5 },
-    { base: '#33505a', lit: 0.55 },
+    { base: '#3a4a63', lit: 0.35 }, { base: '#5a4632', lit: 0.3 },
+    { base: '#6b3a44', lit: 0.32 }, { base: '#2f3a4a', lit: 0.38 },
+    { base: '#7a6a55', lit: 0.28 }, { base: '#4a3a5a', lit: 0.32 },
+    { base: '#33505a', lit: 0.35 },
   ];
   const shopSigns = [
     ['NEON COLA', '#ff2e88'], ['TACO PALACE', '#ff5a3d'], ['DONUT DRIVE', '#ff9a3d'],
@@ -337,16 +342,16 @@ export function buildCity(scene) {
   let signIdx = 0;
   // Glass Spire (tallest tower, finale heist site) at (120,-120)
   const spire = new THREE.Group();
-  const spireTex = windowTexture('#2a3a55', 0.65);
+  const spireTex = windowTexture('#2a3a55', 0.4);
   const spireBody = new THREE.Mesh(new THREE.BoxGeometry(34, 88, 34),
     new THREE.MeshStandardMaterial({ map: spireTex, roughness: 0.25, metalness: 0.6, envMapIntensity: 1.2 }));
   spireBody.position.y = 44; spire.add(spireBody);
   const spireTop = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), MAT.glass);
   spireTop.position.y = 93; spire.add(spireTop);
   const spireTip = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.2, 12, 6),
-    new THREE.MeshStandardMaterial({ color: 0xff2e88, emissive: 0xff2e88, emissiveIntensity: 2 }));
+    new THREE.MeshStandardMaterial({ color: 0xff2e88, emissive: 0xff2e88, emissiveIntensity: 1.3 }));
   spireTip.position.y = 104; spire.add(spireTip);
-  addGlow(spire, 0, 104, 0, 9, glowTexPink);
+  addGlow(spire, 0, 104, 0, 6, glowTexPink);
   spire.position.set(120, 0, -120); scene.add(spire);
 
   // Regular blocks: one building per block, with facade variety.
@@ -393,9 +398,9 @@ export function buildCity(scene) {
           0, 2.1, d / 2 + 0.2, b);
         const st = signTexture(name, col, '#0d0f18');
         const sp = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(14, w * 0.7), 2.6),
-          new THREE.MeshStandardMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 1.4, transparent: true }));
+          new THREE.MeshStandardMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0.9, transparent: true }));
         sp.position.set(0, 3.4, d / 2 + 0.65); b.add(sp);
-        addGlow(b, 0, 3.4, d / 2 + 1.2, 5, col === '#ff2e88' || col === '#c86bff' || col === '#ff2ec8' ? glowTexPink : glowTexCyan);
+        addGlow(b, 0, 3.4, d / 2 + 1.2, 3.5, col === '#ff2e88' || col === '#c86bff' || col === '#ff2ec8' ? glowTexPink : glowTexCyan);
         // awning (sloped, striped by colour)
         const aw = box(w * 0.7, 0.25, 2.4, pick(awnMats), 0, 4.6, d / 2 + 1.2, b);
         aw.rotation.x = 0.28;
@@ -417,7 +422,7 @@ export function buildCity(scene) {
   fwater.position.y = 1.25; plaza.add(fwater);
   const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2.4, 8), MAT.concrete);
   jet.position.y = 2.2; plaza.add(jet);
-  addGlow(plaza, 0, 3.4, 0, 4, glowTexCyan);
+  addGlow(plaza, 0, 3.4, 0, 3, glowTexCyan);
   plaza.position.set(-60, 0, 60); scene.add(plaza);
 
   // ---- SAN AMARO sign (big, glowing, on a frame near the canal) ----
@@ -435,9 +440,9 @@ export function buildCity(scene) {
     g.fillText('SAN AMARO', w / 2, h / 2 + 6);
   });
   const san = new THREE.Mesh(new THREE.PlaneGeometry(26, 6.5),
-    new THREE.MeshStandardMaterial({ map: sanTex, emissive: 0xffffff, emissiveMap: sanTex, emissiveIntensity: 1.8, transparent: true }));
+    new THREE.MeshStandardMaterial({ map: sanTex, emissive: 0xffffff, emissiveMap: sanTex, emissiveIntensity: 1.1, transparent: true }));
   san.position.set(0, 13, 0); signG.add(san);
-  addGlow(signG, 0, 13, 0, 16, glowTexCyan);
+  addGlow(signG, 0, 13, 0, 10, glowTexCyan);
   signG.position.set(-52, 0, -248);
   signG.rotation.y = 0.35;
   scene.add(signG);
@@ -477,7 +482,7 @@ export function buildCity(scene) {
     const h = 40 + rand() * 130;
     const w = 26 + rand() * 30;
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w),
-      new THREE.MeshStandardMaterial({ map: windowTexture('#1c2438', 0.35), roughness: 0.6, metalness: 0.3 }));
+      new THREE.MeshStandardMaterial({ map: windowTexture('#1c2438', 0.22), roughness: 0.6, metalness: 0.3 }));
     b.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r);
     skyline.add(b);
   }

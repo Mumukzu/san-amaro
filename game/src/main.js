@@ -106,9 +106,12 @@ try {
   if (EffectComposer && UnrealBloomPass) {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
+    // Calm bloom: the old threshold (0.5) let every lit window bloom into
+    // a glowing wall. 0.8 keeps the bloom on the sun / muzzle flash /
+    // police lights only, so the buildings stay readable at golden hour.
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(Math.floor(window.innerWidth / 2), Math.floor(window.innerHeight / 2)),
-      0.32, 0.72, 0.5);
+      0.22, 0.55, 0.8);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
   }
