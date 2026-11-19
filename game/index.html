@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAN AMARO — Steal the sunset. Own the city.</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#0d0f1a;
+    --panel:rgba(16,18,26,.86);
+    --panel-border:rgba(255,255,255,.12);
+    --pink:#ff2e88; --cyan:#22e6ff; --gold:#ffd23e;
+    --danger:#ff2a1a; --success:#2aff5a;
+    --text:#f4f6ff; --muted:#9aa3b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
+  #app{position:fixed;inset:0}
+  #app canvas{display:block;width:100%;height:100%;
+    filter:saturate(1.22) contrast(1.05) brightness(1.01)}
+  /* Warm golden-hour grade over the 3D view only (below the HUD panels). */
+  #grade{position:fixed;inset:0;pointer-events:none;z-index:1;
+    background:
+      radial-gradient(120% 90% at 50% 108%, rgba(255,122,26,.20), rgba(255,122,26,0) 55%),
+      linear-gradient(180deg, rgba(255,46,136,.07) 0%, rgba(255,46,136,0) 26%,
+        rgba(255,122,26,0) 62%, rgba(255,122,26,.10) 100%),
+      radial-gradient(130% 130% at 50% 50%, rgba(0,0,0,0) 58%, rgba(10,6,18,.42) 100%)}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:2;
+    font-size:14px;line-height:1.35}
+  .panel{background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:12px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+  .kicker{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--gold);
+    text-transform:uppercase}
+  .title{font-weight:900;text-transform:uppercase;letter-spacing:.08em;
+    font-size:19px;line-height:1.1;
+    background:linear-gradient(90deg,#ffd23e,#ff2e88);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 12px rgba(255,46,136,.25)}
+  .obj{font-weight:800;font-size:16px;margin-top:2px}
+  .desc{color:#d6dbe8;font-size:13px;margin-top:2px}
+  .bar{height:7px;border-radius:99px;background:rgba(255,255,255,.14);
+    overflow:hidden;margin-top:6px}
+  .bar>i{display:block;height:100%;border-radius:99px;background:var(--pink)}
+  .meta{display:flex;justify-content:space-between;color:var(--muted);
+    font-size:11px;font-weight:700;margin-top:6px;letter-spacing:.04em}
+  .meta b{color:var(--gold)}
+  /* Mission panel — top left */
+  #mission{position:absolute;top:16px;left:16px;width:340px}
+  /* Wanted block — top center */
+  #wanted{position:absolute;top:12px;left:50%;transform:translateX(-50%);
+    text-align:center;width:300px}
+  #stars{display:flex;gap:6px;justify-content:center}
+  #stars svg{width:26px;height:26px;fill:rgba(255,255,255,.22);
+    stroke:rgba(255,255,255,.35);stroke-width:1}
+  #stars svg.lit{fill:#ff2a1a;stroke:#ff6a5e;
+    filter:drop-shadow(0 0 6px rgba(255,42,26,.8))}
+  #status-badge{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:99px;
+    font-size:11px;font-weight:900;letter-spacing:.12em;background:var(--danger);color:#fff}
+  #status-badge.spotted{background:#b8860b}
+  #status-badge.clear{background:#2a7a3a}
+  #day-line{margin-top:6px;font-size:12px;font-weight:800;letter-spacing:.14em}
+  #golden-line{font-size:11px;font-weight:900;letter-spacing:.22em;color:var(--gold)}
+  #money{font-size:26px;font-weight:900;color:var(--gold);
+    text-shadow:0 2px 10px rgba(255,210,62,.4)}
+  #xp{margin-top:4px;background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:10px;padding:6px 10px;display:flex;align-items:center;gap:8px}
+  #xp .who{font-size:11px;font-weight:900;letter-spacing:.1em}
+  #xp .bar{flex:1;margin:0}
+  #xp .bar>i{background:var(--cyan)}
+  #xp .num{font-size:11px;font-weight:800;color:var(--muted)}
+  /* Minimap — top right */
+  #minimap-wrap{position:absolute;top:14px;right:16px;text-align:center;width:184px}
+  #minimap{width:170px;height:170px;border-radius:50%;
+    border:3px solid rgba(255,255,255,.28);background:#0a0d18;
+    box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  #district{margin-top:6px;font-size:14px;font-weight:900;letter-spacing:.12em}
+  #street{font-size:11px;color:var(--muted);font-weight:700}
+  /* Police response — right, below minimap */
+  #police{position:absolute;top:248px;right:16px;width:264px}
+  #police h3{font-size:11px;font-weight:900;letter-spacing:.16em;color:var(--muted);
+    margin-bottom:6px}
+  .cop{display:flex;align-items:center;gap:8px;padding:5px 0;
+    border-top:1px solid rgba(255,255,255,.07);font-weight:800;font-size:13px}
+  .cop:first-of-type{border-top:0}
+  .cop .dist{margin-left:auto;color:var(--muted);font-weight:700}
+  .badge{font-size:10px;font-weight:900;letter-spacing:.08em;padding:3px 8px;
+    border-radius:99px;color:#fff}
+  .badge.pursuit{background:var(--danger)}
+  .badge.enroute{background:#b8860b}
+  .badge.standby{background:#5a6478}
+  /* Vehicle readout — bottom right */
+  #vehicle{position:absolute;right:16px;bottom:16px;width:300px}
+  #veh-speed{font-size:34px;font-weight:900;line-height:1}
+  #veh-speed small{font-size:14px;font-weight:800;color:var(--muted)}
+  .vbar{margin-top:8px}
+  .vbar .lbl{display:flex;justify-content:space-between;font-size:11px;
+    font-weight:800;letter-spacing:.1em;color:var(--muted)}
+  .vbar .lbl b{color:var(--text)}
+  .vbar .bar>i{background:var(--success)}
+  .vbar.nitro .bar>i{background:linear-gradient(90deg,var(--cyan),var(--pink))}
+  #radio{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}
+  #radio-station{color:var(--pink);font-weight:900;letter-spacing:.08em;font-size:13px}
+  #radio-track{font-weight:700;font-size:13px}
+  #radio-genre{color:var(--muted);font-size:11px}
+  /* Dialogue — bottom center, above the weapon wheel */
+  #dialogue{position:absolute;left:50%;transform:translateX(-50%);
+    bottom:96px;width:430px;display:flex;gap:12px;align-items:center}
+  #dlg-portrait{width:64px;height:64px;flex:0 0 64px;border-radius:50%;
+    overflow:hidden;border:2px solid var(--pink);background:#2a1f3a}
+  #dlg-portrait svg{width:100%;height:100%;display:block}
+  #dlg-name{color:var(--pink);font-weight:900;font-size:12px;letter-spacing:.1em}
+  #dlg-line{font-size:14px;font-weight:600;margin-top:2px}
+  /* Health + crew — bottom left */
+  #health{position:absolute;left:16px;bottom:16px;width:232px}
+  .hbar{margin-bottom:8px}
+  .hbar .lbl{display:flex;justify-content:space-between;font-size:11px;
+    font-weight:900;letter-spacing:.12em}
+  .hbar .bar{margin-top:4px}
+  .hbar.health .bar>i{background:var(--success)}
+  .hbar.armor .bar>i{background:#8fa3c8}
+  #crew{display:flex;gap:14px;margin-top:10px}
+  .crew-mate{text-align:center;font-size:10px;font-weight:800;
+    letter-spacing:.08em;color:var(--muted)}
+  .crew-mate .face{width:44px;height:44px;border-radius:50%;overflow:hidden;
+    border:2px solid rgba(255,255,255,.25);margin:0 auto 3px;background:#2a1f3a}
+  .crew-mate .face svg{width:100%;height:100%;display:block}
+  /* Weapon wheel — bottom center */
+  #weapons{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;
+    display:flex;gap:8px}
+  .slot{width:104px;background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:10px;padding:7px 6px 6px;text-align:center}
+  .slot.active{border:2px solid var(--gold);
+    box-shadow:0 0 0 1px var(--gold),0 0 18px rgba(255,210,62,.35)}
+  .slot .ic{height:26px;display:flex;align-items:center;justify-content:center}
+  .slot .ic svg{width:30px;height:22px;stroke:var(--text);fill:none;
+    stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .slot .nm{font-size:10px;font-weight:900;letter-spacing:.08em;margin-top:2px}
+  .slot .am{font-size:11px;font-weight:800;color:var(--gold)}
+  .slot.locked{opacity:.55}
+  .slot.locked .am{color:var(--muted)}
+  /* Start screen */
+  #start{position:fixed;inset:0;z-index:3;display:flex;flex-direction:column;
+    justify-content:center;padding:0 7vw;
+    background:linear-gradient(180deg,rgba(13,15,26,.25),rgba(13,15,26,.72))}
+  #start h1{font-size:min(96px,11vw);font-weight:900;letter-spacing:.04em;
+    line-height:.95;text-transform:uppercase;
+    background:linear-gradient(90deg,#ffd23e,#ff2e88 55%,#22e6ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 8px 40px rgba(255,46,136,.35)}
+  #start .tag{margin-top:10px;font-size:15px;font-weight:800;letter-spacing:.3em;
+    color:#ffe9a8;text-transform:uppercase}
+  #start .menu{margin-top:44px;display:flex;flex-direction:column;gap:10px;
+    max-width:340px}
+  #start .menu button{pointer-events:auto;text-align:left;background:rgba(16,18,26,.85);
+    border:1px solid var(--panel-border);border-left:4px solid var(--pink);
+    color:var(--text);font:900 20px/1 system-ui,sans-serif;letter-spacing:.1em;
+    padding:14px 18px;border-radius:8px;cursor:pointer;text-transform:uppercase}
+  #start .menu button:hover{border-left-color:var(--gold);background:rgba(40,26,48,.9)}
+  #start .slots{margin-top:26px;display:flex;gap:10px;max-width:560px}
+  #start .slots .slot-save{flex:1;background:rgba(16,18,26,.7);
+    border:1px solid var(--panel-border);border-radius:8px;padding:10px 12px;
+    font-size:12px;font-weight:700;color:var(--muted)}
+  #start .slots .slot-save b{display:block;color:var(--text);font-size:13px}
+  #start .foot{position:absolute;left:7vw;bottom:26px;color:var(--muted);
+    font-size:12px;font-weight:600}
+  /* Toast (BUSTED / mission complete) */
+  #toast{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);
+    text-align:center;display:none}
+  #toast .big{font-size:64px;font-weight:900;letter-spacing:.1em;color:var(--danger);
+    text-shadow:0 4px 30px rgba(255,42,26,.6)}
+  #toast .sub{font-size:16px;font-weight:700;color:var(--text);margin-top:6px}
+  #hud.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="grade"></div>
+
+<div id="hud" class="hidden">
+  <div id="mission" class="panel">
+    <div class="kicker" id="mp-chapter">Chapter 1 · Mission 1</div>
+    <div class="title" id="mp-title">First Wheels</div>
+    <div class="obj" id="mp-objective">Lose the police</div>
+    <div class="desc" id="mp-desc">Two cruisers on you — lose them, then get to the marker.</div>
+    <div class="bar"><i id="mp-fill" style="width:100%"></i></div>
+    <div class="meta"><span id="mp-stage">Stage 3 / 3</span>
+      <span>PAR BONUS <b id="mp-par">+$100</b> · <b id="mp-time">00:01 / 02:41</b></span></div>
+  </div>
+
+  <div id="wanted">
+    <div id="stars"></div>
+    <div><span id="status-badge">IN PURSUIT · 2 UNITS</span></div>
+    <div id="day-line">DAY 1 · 18:25</div>
+    <div id="golden-line">GOLDEN HOUR</div>
+    <div id="money">$250</div>
+    <div id="xp"><span class="who" id="xp-rank">NOBODY</span>
+      <span class="bar"><i id="xp-fill" style="width:0%"></i></span>
+      <span class="num" id="xp-num">0 / 200 XP</span></div>
+  </div>
+
+  <div id="minimap-wrap">
+    <canvas id="minimap" width="340" height="340"></canvas>
+    <div id="district">DOWNTOWN CORE</div>
+    <div id="street">Lantern Blvd · Street Smart</div>
+  </div>
+
+  <div id="police" class="panel">
+    <h3>SAMPD RESPONSE</h3>
+    <div class="cop"><span>BAY-12</span><span class="dist" id="cop0-dist">7 m</span>
+      <span class="badge pursuit" id="cop0-badge">PURSUIT</span></div>
+    <div class="cop"><span>VICTOR-7</span><span class="dist" id="cop1-dist">13 m</span>
+      <span class="badge enroute" id="cop1-badge">EN ROUTE</span></div>
+    <div class="cop"><span>AIR-1</span><span class="dist" id="cop2-dist">—</span>
+      <span class="badge standby" id="cop2-badge">STANDBY</span></div>
+  </div>
+
+  <div id="vehicle" class="panel">
+    <div class="kicker" id="veh-name">Comet GT · Sports</div>
+    <div id="veh-speed">58 <small>km/h</small></div>
+    <div class="vbar"><div class="lbl"><span>CONDITION</span><b id="veh-cond-num">100%</b></div>
+      <div class="bar"><i id="veh-cond" style="width:100%"></i></div></div>
+    <div class="vbar nitro"><div class="lbl"><span>NITRO</span><b id="veh-nitro-num">100%</b></div>
+      <div class="bar"><i id="veh-nitro" style="width:100%"></i></div></div>
+    <div id="radio">
+      <div id="radio-station">NEON TIDE 102.5</div>
+      <div id="radio-track">“Neon Horizon” — Midnight Palms</div>
+      <div id="radio-genre">Synthwave · Golden-hour driving</div>
+    </div>
+  </div>
+
+  <div id="dialogue" class="panel">
+    <div id="dlg-portrait"></div>
+    <div><div id="dlg-name">NADIA · PALM &amp; PISTON</div>
+      <div id="dlg-line">“BAY-12 is on your tail — lose them before the bridge, or you’re done.”</div></div>
+  </div>
+
+  <div id="health" class="panel">
+    <div class="hbar health"><div class="lbl"><span>HEALTH</span><span id="hp-num">100</span></div>
+      <div class="bar"><i id="hp-fill" style="width:100%"></i></div></div>
+    <div class="hbar armor"><div class="lbl"><span>ARMOR</span><span id="ar-num">0</span></div>
+      <div class="bar"><i id="ar-fill" style="width:0%"></i></div></div>
+    <div id="crew"></div>
+  </div>
+
+  <div id="weapons"></div>
+  <div id="toast"><div class="big" id="toast-big">BUSTED</div>
+    <div class="sub" id="toast-sub">The SAMPD got you. $100 bail.</div></div>
+</div>
+
+<div id="start">
+  <h1>San Amaro</h1>
+  <div class="tag">Steal the sunset. Own the city.</div>
+  <div class="menu">
+    <button id="btn-new">New Game</button>
+    <button id="btn-continue">Continue</button>
+    <button id="btn-controls">Controls</button>
+  </div>
+  <div class="slots">
+    <div class="slot-save"><b>SLOT 1 · EMPTY</b>Start a new game here</div>
+    <div class="slot-save"><b>SLOT 2 · EMPTY</b>Start a new game here</div>
+    <div class="slot-save"><b>SLOT 3 · EMPTY</b>Start a new game here</div>
+  </div>
+  <div class="foot">An original open-world crime game · made in code with three.js · press Enter</div>
+</div>
+
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
