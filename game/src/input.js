@@ -1,53 +1,101 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
-
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
-
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
-
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
+// Keyboard + mouse input for the 3D game.
+// keys: held-key map by event.code (player.js reads input.keys directly).
+// takeOrbit(): accumulated mouse movement since the last call (pointer lock
+// or left-button drag). takeAction(name): one-shot presses, consumed once.
+// Pointer lock on canvas click; blur releases every key.
+export function createInput(canvas) {
+  const keys = {};
+  const pressed = new Set();
+  let orbitX = 0;
+  let orbitY = 0;
+  let locked = false;
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
 
   window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
+    if (event.repeat) {
+      keys[event.code] = true;
+      return;
+    }
+    keys[event.code] = true;
+    if (event.code === 'KeyE') pressed.add('enter');
+    else if (event.code === 'KeyT') pressed.add('time');
+    else if (event.code === 'KeyM') pressed.add('mute');
+    else if (event.code === 'KeyH') pressed.add('help');
+    else if (event.code === 'KeyP' || event.code === 'Escape') pressed.add('pause');
+    else if (event.code === 'Enter' || event.code === 'Space') pressed.add('confirm');
+    if (event.code === 'Space') event.preventDefault(); // page must not scroll
   });
   window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
+    keys[event.code] = false;
   });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
   window.addEventListener('blur', () => {
-    left = false;
-    right = false;
+    for (const k of Object.keys(keys)) keys[k] = false;
+    dragging = false;
   });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      for (const k of Object.keys(keys)) keys[k] = false;
+      dragging = false;
+    }
+  });
+
+  canvas.addEventListener('click', () => {
+    try {
+      if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
+    } catch {
+      // Pointer lock is a nicety; drag-orbit still works without it.
+    }
+  });
+  document.addEventListener('pointerlockchange', () => {
+    locked = document.pointerLockElement === canvas;
+  });
+  document.addEventListener('mousemove', (event) => {
+    if (locked) {
+      orbitX += event.movementX;
+      orbitY += event.movementY;
+    } else if (dragging) {
+      orbitX += event.clientX - lastX;
+      orbitY += event.clientY - lastY;
+      lastX = event.clientX;
+      lastY = event.clientY;
+    }
+  });
+  canvas.addEventListener('mousedown', (event) => {
+    if (event.button === 0) {
+      dragging = true;
+      lastX = event.clientX;
+      lastY = event.clientY;
+    }
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
   });
 
   return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
+    keys,
+    takeOrbit() {
+      const o = { x: orbitX, y: orbitY };
+      orbitX = 0;
+      orbitY = 0;
+      return o;
     },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
+    takeAction(name) {
+      if (pressed.has(name)) {
+        pressed.delete(name);
+        return true;
+      }
+      return false;
+    },
+    hasAction(name) {
+      return pressed.has(name);
+    },
+    clearActions() {
+      pressed.clear();
+    },
+    isLocked() {
+      return locked;
     },
   };
 }

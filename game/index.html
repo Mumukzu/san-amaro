@@ -3,17 +3,323 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>San Amaro — Steal the sunset. Own the city.</title>
+<link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  /* SAN AMARO HUD — same design system as mockups/hud.html and GAME_BIBLE.md §11.
+     System font stacks only (offline). No network. */
+  :root {
+    --bg: #0d0f1a;
+    --panel: rgba(16, 18, 26, 0.85);
+    --panel-border: rgba(255, 255, 255, 0.12);
+    --accent1: #ff2e88;
+    --accent2: #22e6ff;
+    --accent3: #ffd23e;
+    --danger: #ff2a1a;
+    --success: #2aff5a;
+    --text: #eef1f5;
+    --muted: #8b93a3;
+    --radius: 10px;
+    --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body { font-family: var(--font); color: var(--text); font-size: 14px; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: var(--radius); backdrop-filter: blur(6px);
+    padding: 10px 12px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  }
+  .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 4px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; }
+  .badge.pink { background: var(--accent1); color: #fff; }
+  .badge.cyan { background: var(--accent2); color: #04222a; }
+  .badge.gold { background: var(--accent3); color: #3a2a00; }
+  .badge.red { background: var(--danger); color: #fff; }
+  .badge.grey { background: rgba(255, 255, 255, 0.16); color: var(--text); }
+  kbd.key {
+    display: inline-block; min-width: 24px; padding: 3px 7px; text-align: center;
+    background: rgba(255, 255, 255, 0.10); border: 1px solid rgba(255, 255, 255, 0.28);
+    border-bottom-width: 3px; border-radius: 6px; font: 700 12px var(--font); color: var(--text);
+  }
+  .logo {
+    font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em;
+    background: linear-gradient(90deg, var(--accent1), var(--accent3));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* ---- In-game HUD ---- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud.hidden { display: none; }
+  .mission { position: absolute; left: 18px; top: 16px; width: 320px; }
+  .mission h3 { font-size: 15px; font-weight: 900; letter-spacing: 0.05em; }
+  .mission h3 span { color: var(--accent3); }
+  .mission .obj { margin-top: 6px; font-size: 14px; font-weight: 700; }
+  .mission .hint { margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .mission .bar { margin-top: 8px; }
+  .mission .bar > i { background: var(--accent1); width: 33%; }
+  .mission .meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .mission .meta b { color: var(--accent3); }
+
+  .topmid { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); text-align: center; }
+  .stars { font-size: 26px; letter-spacing: 4px; color: var(--accent3); text-shadow: 0 0 12px rgba(255, 210, 62, 0.6); }
+  .stars .off { color: rgba(255, 255, 255, 0.28); text-shadow: none; }
+  .stars.hot { color: var(--danger); text-shadow: 0 0 12px rgba(255, 42, 26, 0.7); }
+  .topmid .clock { margin-top: 2px; font-size: 13px; font-weight: 800; letter-spacing: 0.1em; }
+  .topmid .money { font-size: 22px; font-weight: 900; color: var(--accent3); margin-top: 2px; }
+  .topmid .rep { margin: 6px auto 0; width: 220px; text-align: left; }
+  .topmid .rep .row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+  .topmid .rep .bar { margin-top: 3px; }
+  .topmid .rep .bar > i { background: var(--accent2); width: 52%; }
+
+  .mapwrap { position: absolute; right: 18px; top: 16px; text-align: right; }
+  .mapwrap .minimap { width: 168px; height: 168px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.35); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5); background: #10121a; }
+  .mapwrap .district { margin-top: 8px; font-size: 13px; font-weight: 800; letter-spacing: 0.05em; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
+  .mapwrap .street { font-size: 11px; color: #c8cfdb; text-align: right; margin-top: 2px; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
+
+  .police { position: absolute; right: 18px; top: 300px; width: 240px; }
+  .police h4 { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
+  .police .unit { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+  .police .unit:first-of-type { border-top: none; }
+  .police .unit b { font-weight: 800; }
+
+  .vitals { position: absolute; left: 18px; bottom: 16px; width: 260px; }
+  .vitals .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .vitals .row .label { width: 44px; }
+  .vitals .bar { flex: 1; }
+  .vitals .bar.health > i { background: var(--success); }
+  .vitals .bar.armor > i { background: var(--accent2); }
+  .vitals .row .num { font-size: 11px; font-weight: 800; width: 30px; text-align: right; }
+  .crew { display: flex; gap: 8px; margin-top: 10px; }
+  .crew .member { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: var(--muted); }
+  .crew .portrait { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(255,255,255,0.3); }
+
+  .weapons { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; }
+  .slot { width: 88px; padding: 7px 6px 6px; text-align: center; border-radius: 8px; background: var(--panel); border: 1px solid var(--panel-border); }
+  .slot.active { border-color: var(--accent3); box-shadow: 0 0 0 1px var(--accent3); }
+  .slot.locked { opacity: 0.45; }
+  .slot .icon { line-height: 1; color: var(--text); }
+  .slot .icon svg { width: 24px; height: 24px; }
+  .slot.active .icon { color: var(--accent3); }
+  .slot .wname { font-size: 10px; font-weight: 800; margin-top: 4px; white-space: nowrap; }
+  .slot .ammo { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .veh { position: absolute; right: 18px; bottom: 16px; width: 280px; }
+  .veh h4 { font-size: 14px; font-weight: 900; }
+  .veh h4 span { color: var(--muted); font-weight: 700; font-size: 11px; }
+  .veh .speed { font-size: 26px; font-weight: 900; margin-top: 2px; }
+  .veh .speed small { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .veh .cond { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .veh .bar { margin-top: 3px; }
+  .veh .bar.cond > i { background: var(--success); }
+  .veh .bar.nitro > i { background: linear-gradient(90deg, var(--accent2), var(--accent1)); }
+  .radio { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.10); }
+  .radio .station { font-weight: 900; font-size: 13px; color: var(--accent1); }
+  .radio .track { font-size: 12px; margin-top: 2px; }
+  .radio .genre { font-size: 11px; color: var(--muted); }
+  .eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; margin-left: 8px; vertical-align: middle; }
+  .eq i { width: 3px; background: var(--accent1); animation: eq 0.9s ease-in-out infinite; }
+  .eq i:nth-child(1) { height: 8px; }
+  .eq i:nth-child(2) { height: 14px; animation-delay: 0.2s; }
+  .eq i:nth-child(3) { height: 6px; animation-delay: 0.4s; }
+  .eq i:nth-child(4) { height: 12px; animation-delay: 0.1s; }
+  .eq i:nth-child(5) { height: 9px; animation-delay: 0.3s; }
+  @keyframes eq { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
+
+  .dialogue { position: absolute; left: 50%; bottom: 108px; transform: translateX(-50%); width: 520px; display: flex; gap: 12px; align-items: center; padding: 12px 14px; }
+  .dialogue .portrait { width: 56px; height: 56px; border-radius: 50%; flex: none; overflow: hidden; border: 2px solid var(--accent1); }
+  .dialogue .who { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; color: var(--accent1); }
+  .dialogue .line { font-size: 14px; line-height: 1.45; margin-top: 3px; }
+
+  #hud-prompt {
+    position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%);
+    padding: 8px 16px; font-size: 14px; font-weight: 700; display: none;
+  }
+  #hud-toast {
+    position: absolute; left: 50%; top: 96px; transform: translateX(-50%);
+    padding: 9px 18px; font-size: 14px; font-weight: 800; opacity: 0;
+    transition: opacity 0.25s; pointer-events: none;
+  }
+  #hud-toast.show { opacity: 1; }
+  #hud-fps {
+    position: absolute; left: 18px; top: 200px; font-size: 11px; color: var(--muted);
+    font-family: ui-monospace, monospace; display: none;
+  }
+
+  /* ---- Menus ---- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; background: rgba(8, 9, 16, 0.55); }
+  .overlay.visible { display: flex; }
+  .menu-card { width: 460px; text-align: center; padding: 28px 30px; }
+  .menu-card .logo { font-size: 52px; line-height: 0.95; display: block; }
+  .menu-card .tagline { margin-top: 8px; font-size: 16px; font-weight: 600; color: #ffe9f2; }
+  .menu-card .blurb { margin-top: 12px; font-size: 13px; line-height: 1.55; color: #d8dce6; }
+  .menu-card .buttons { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .menu-btn {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-radius: var(--radius);
+    background: var(--panel); border: 1px solid var(--panel-border);
+    font: 800 15px var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text);
+    cursor: pointer; text-align: left; width: 100%;
+  }
+  .menu-btn:hover { border-color: var(--accent1); }
+  .menu-btn.primary { border-color: var(--accent1); box-shadow: 0 0 0 1px var(--accent1), 0 4px 18px rgba(255, 46, 136, 0.35); }
+  .menu-btn small { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .menu-card h2 { font-size: 20px; font-weight: 900; letter-spacing: 0.06em; }
+  .menu-card p { margin-top: 8px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  #help-panel {
+    position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 11;
+    width: 320px; display: none;
+  }
+  #help-panel.visible { display: block; }
+  #help-panel h2 { font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  #help-panel .rows { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+  #help-panel .rows div { display: flex; align-items: center; gap: 8px; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="San Amaro: explore the city on foot or by car"></canvas>
 <p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud" class="hidden">
+  <div class="mission panel">
+    <div class="label">Chapter 1 · Mission 1</div>
+    <h3>FIRST <span>WHEELS</span></h3>
+    <div class="obj" id="hud-objective">Explore San Amaro</div>
+    <div class="hint">Steal a car, then drive to the pink marker.</div>
+    <div class="bar"><i></i></div>
+    <div class="meta"><span>Stage 1 / 3</span><span>PAR BONUS <b>+$100</b></span></div>
+  </div>
+
+  <div class="topmid">
+    <div class="stars" id="hud-stars">☆☆☆</div>
+    <div class="clock" id="hud-clock">SUNSET</div>
+    <div class="money" id="hud-money">$250</div>
+    <div class="rep panel">
+      <div class="row"><span>NOBODY</span><span>0 / 200 XP</span></div>
+      <div class="bar"><i style="width:0%"></i></div>
+    </div>
+  </div>
+
+  <div class="mapwrap">
+    <canvas class="minimap" id="hud-minimap" width="200" height="200"></canvas>
+    <div class="district">DOWNTOWN CORE</div>
+    <div class="street">Lantern Blvd · Street Smart</div>
+  </div>
+
+  <div class="police panel" id="hud-police" style="display:none">
+    <h4>SAMPD RESPONSE</h4>
+    <div class="unit"><b>BAY-12</b><span id="hud-police-dist">—</span><span class="badge red">PURSUIT</span></div>
+    <div class="unit"><b>VICTOR-7</b><span>—</span><span class="badge grey">STANDBY</span></div>
+    <div class="unit"><b>AIR-1</b><span>—</span><span class="badge grey">STANDBY</span></div>
+  </div>
+
+  <div class="vitals panel">
+    <div class="row"><span class="label">HEALTH</span><div class="bar health"><i id="hud-health-fill" style="width:100%"></i></div><span class="num" id="hud-health-num">100</span></div>
+    <div class="row"><span class="label">ARMOR</span><div class="bar armor"><i style="width:0%"></i></div><span class="num">0</span></div>
+    <div class="crew">
+      <div class="member"><svg class="portrait" viewBox="0 0 38 38"><rect width="38" height="38" fill="#3a3f45"/><circle cx="19" cy="17" r="9" fill="#8a5a3a"/><path d="M11 13 Q19 6 27 13 L27 16 Q19 10 11 16 Z" fill="#c23a2a"/><rect x="7" y="26" width="24" height="12" fill="#6a4a2a"/></svg>NADIA</div>
+      <div class="member"><svg class="portrait" viewBox="0 0 38 38"><rect width="38" height="38" fill="#5a3ab0"/><circle cx="19" cy="17" r="9" fill="#c98d64"/><path d="M11 12 Q19 4 27 12 L27 15 Q19 8 11 15 Z" fill="#8a8a8a"/><rect x="7" y="26" width="24" height="12" fill="#3a5ab0"/></svg>THEO</div>
+      <div class="member"><svg class="portrait" viewBox="0 0 38 38"><rect width="38" height="38" fill="#ff2e88"/><circle cx="19" cy="17" r="9" fill="#e8b88a"/><path d="M11 14 Q19 4 27 14 L26 17 Q19 8 12 17 Z" fill="#f4e3c2"/><rect x="7" y="26" width="24" height="12" fill="#ff2e88"/></svg>MARA</div>
+    </div>
+  </div>
+
+  <div class="weapons">
+    <div class="slot active"><div class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/></svg></div><div class="wname">FISTS</div><div class="ammo">—</div></div>
+    <div class="slot locked"><div class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="14" height="4"/><rect x="6" y="9" width="4" height="8"/></svg></div><div class="wname">P9 PISTOL</div><div class="ammo">LOCKED</div></div>
+    <div class="slot locked"><div class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="6" width="16" height="3.4"/><rect x="6" y="9.4" width="3.6" height="7"/><rect x="16" y="7" width="5" height="2.4"/></svg></div><div class="wname">VIPER SMG</div><div class="ammo">LOCKED</div></div>
+    <div class="slot locked"><div class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="6" width="18" height="3"/><rect x="2" y="10" width="18" height="3"/><rect x="6" y="13" width="4" height="6"/></svg></div><div class="wname">SCATTERGUN</div><div class="ammo">LOCKED</div></div>
+    <div class="slot locked"><div class="icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="8" width="19" height="2.4"/><rect x="9" y="4.5" width="6" height="3"/><rect x="7" y="10.4" width="3.4" height="7"/></svg></div><div class="wname">LONGSHOT</div><div class="ammo">LOCKED</div></div>
+  </div>
+
+  <div class="veh panel" id="hud-vehicle" style="display:none">
+    <h4>MARINA SEDAN <span>· SEDAN</span></h4>
+    <div class="speed"><span id="hud-speed">0 km/h</span></div>
+    <div class="cond"><span>CONDITION</span><span id="hud-cond-num">100%</span></div>
+    <div class="bar cond"><i id="hud-cond-fill" style="width:100%"></i></div>
+    <div class="cond"><span>NITRO</span><span id="hud-nitro-num">100%</span></div>
+    <div class="bar nitro"><i id="hud-nitro-fill" style="width:100%"></i></div>
+    <div class="radio">
+      <span class="station">NEON TIDE 102.5</span>
+      <span class="eq"><i></i><i></i><i></i><i></i><i></i></span>
+      <div class="track">“Neon Horizon” — Midnight Palms</div>
+      <div class="genre">Synthwave · Golden-hour driving</div>
+    </div>
+  </div>
+
+  <div class="dialogue panel" id="hud-dialogue" style="display:none">
+    <svg class="portrait" viewBox="0 0 56 56"><rect width="56" height="56" fill="#3a3f45"/><circle cx="28" cy="25" r="13" fill="#8a5a3a"/><path d="M15 20 Q28 9 41 20 L41 24 Q28 14 15 24 Z" fill="#c23a2a"/><rect x="12" y="38" width="32" height="18" fill="#6a4a2a"/></svg>
+    <div>
+      <div class="who" id="hud-dialogue-who">NADIA · PALM &amp; PISTON</div>
+      <div class="line" id="hud-dialogue-line">“You break it, you bought it. Get the car to the marker — and don’t scratch the paint.”</div>
+    </div>
+  </div>
+
+  <div class="panel" id="hud-prompt"></div>
+  <div class="panel" id="hud-toast"></div>
+  <div id="hud-fps"></div>
+</div>
+
+<div class="overlay visible" id="menu">
+  <div class="menu-card panel">
+    <span class="logo">San Amaro</span>
+    <div class="tagline">Steal the sunset. Own the city.</div>
+    <p class="blurb">Jay Moreno is back in San Amaro after three years away — and his late
+    brother's garage, Palm &amp; Piston, owes the Chrome Kings $50,000 with one week
+    to pay. Steal, race and run through every district to raise the money…
+    or lose the garage for good.</p>
+    <div class="buttons">
+      <button class="menu-btn primary" id="btn-continue"><span>Continue</span><small id="continue-sub">Chapter 1 · $250 · Day 1</small></button>
+      <button class="menu-btn" id="btn-new"><span>New Game</span><small>Start from Chapter 1</small></button>
+      <button class="menu-btn" id="btn-controls"><span>Controls</span><small>WASD · E · Space · T</small></button>
+      <button class="menu-btn" id="btn-mute"><span>Sound</span><small id="mute-sub">On — click to mute</small></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause-menu">
+  <div class="menu-card panel">
+    <h2>PAUSED</h2>
+    <p>San Amaro waits for no one. Well — except right now.</p>
+    <div class="buttons">
+      <button class="menu-btn primary" id="btn-resume"><span>Resume</span><small>Back to the streets</small></button>
+      <button class="menu-btn" id="btn-restart"><span>Restart position</span><small>Back to Palm &amp; Piston</small></button>
+      <button class="menu-btn" id="btn-quit"><span>Quit to title</span><small>Progress is saved</small></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="busted-menu">
+  <div class="menu-card panel">
+    <h2>BUSTED</h2>
+    <p>The SAMPD got you. $100 bail.</p>
+    <div class="buttons">
+      <button class="menu-btn primary" id="btn-bail"><span>Pay bail &amp; continue</span><small>−$100 · back on the street</small></button>
+      <button class="menu-btn" id="btn-busted-quit"><span>Quit to title</span><small>Progress is saved</small></button>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="help-panel">
+  <h2>How to play</h2>
+  <div class="rows">
+    <div><kbd class="key">W</kbd><kbd class="key">A</kbd><kbd class="key">S</kbd><kbd class="key">D</kbd><span>Move / drive</span></div>
+    <div><kbd class="key">E</kbd><span>Enter / exit car</span></div>
+    <div><kbd class="key">Space</kbd><span>Jump / handbrake</span></div>
+    <div><kbd class="key">Shift</kbd><span>Run / nitro (in car)</span></div>
+    <div><kbd class="key">T</kbd><span>Change time of day</span></div>
+    <div><kbd class="key">P</kbd><span>Pause</span><kbd class="key">M</kbd><span>Mute</span><kbd class="key">H</kbd><span>Help</span></div>
+    <div><span>Mouse</span><span>Orbit camera (click to lock)</span></div>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
