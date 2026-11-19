@@ -28,7 +28,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xe88a5a, 90, 780);
+scene.fog = new THREE.Fog(0xd9788a, 90, 780);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 4, -12);
 
@@ -46,13 +46,13 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
         float h = d.y;
         vec3 top = vec3(0.11, 0.07, 0.26);
         vec3 mid = vec3(0.96, 0.36, 0.52);
-        vec3 hor = vec3(1.0, 0.52, 0.13);
+        vec3 hor = vec3(1.0, 0.38, 0.34);
         vec3 col = mix(hor, mid, smoothstep(0.02, 0.28, h));
         col = mix(col, top, smoothstep(0.22, 0.68, h));
         col = mix(vec3(0.16,0.10,0.20), col, smoothstep(-0.08, 0.02, h));
         float s = max(dot(d, sunDir), 0.0);
-        col += vec3(1.0, 0.55, 0.18) * pow(s, 18.0) * 0.45;
-        col += vec3(1.0, 0.78, 0.42) * pow(s, 220.0) * 1.3;
+        col += vec3(1.0, 0.42, 0.34) * pow(s, 18.0) * 0.45;
+        col += vec3(1.0, 0.72, 0.52) * pow(s, 220.0) * 1.3;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -63,8 +63,8 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
   const gg = gc.getContext('2d');
   const grad = gg.createRadialGradient(64, 64, 2, 64, 64, 62);
   grad.addColorStop(0, 'rgba(255,230,160,1)');
-  grad.addColorStop(0.35, 'rgba(255,150,60,.7)');
-  grad.addColorStop(1, 'rgba(255,120,0,0)');
+  grad.addColorStop(0.35, 'rgba(255,120,90,.7)');
+  grad.addColorStop(1, 'rgba(255,80,80,0)');
   gg.fillStyle = grad; gg.fillRect(0, 0, 128, 128);
   const sunTex = new THREE.CanvasTexture(gc);
   const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 }));
@@ -83,7 +83,7 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
     g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
     return c;
   };
-  const side = mk('#3a2a5a', '#ff6a8a', '#ff8a2a');
+  const side = mk('#3a2a5a', '#ff5a9a', '#e85a7a');
   const topF = mk('#2a1a4a', '#3a2a5a', '#5a3a6a');
   const botF = mk('#1a1218', '#241a20', '#2a1a16');
   faces.push(side, side, topF, botF, side, side);
@@ -93,11 +93,11 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
 }
 
 // ---------- lights ----------
-const sun = new THREE.DirectionalLight(0xffb36b, 1.9);
+const sun = new THREE.DirectionalLight(0xff9a70, 1.9);
 sun.position.copy(SUN_DIR).multiplyScalar(320);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xff9a6a, 0x2a2438, 0.85));
-scene.add(new THREE.AmbientLight(0xff8a5a, 0.35));
+scene.add(new THREE.HemisphereLight(0xff7a9a, 0x2a2438, 0.85));
+scene.add(new THREE.AmbientLight(0xff7a8a, 0.35));
 
 // ---------- bloom (real, via the vendored bundle) — falls back to direct render ----------
 let composer = null;

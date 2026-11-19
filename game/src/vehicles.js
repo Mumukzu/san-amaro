@@ -17,7 +17,7 @@ const LED = new THREE.MeshStandardMaterial({ color: 0x22e6ff, emissive: 0x22e6ff
 // Car specs (from the spec §7; colours matched to the reference screenshots).
 const SPECS = {
   comet:    { name: 'Comet GT',     kind: 'Sports',  top: 52, color: 0xff2e6a, wing: true,  led: true },
-  sedan:    { name: 'Marina Sedan', kind: 'Sedan',   top: 42, color: 0xe83a4d, wing: false, led: false },
+  sedan:    { name: 'Marina Sedan', kind: 'Sedan',   top: 42, color: 0x4a7ab5, wing: false, led: false },
   muscle:   { name: 'Bruiser',      kind: 'Muscle',  top: 46, color: 0x1c1c22, wing: false, led: false },
   van:      { name: 'Hopper Van',   kind: 'Van',     top: 36, color: 0xe8dcc0, wing: false, led: false },
   truck:    { name: 'Longhaul',     kind: 'Truck',   top: 33, color: 0xc96a2e, wing: false, led: false },

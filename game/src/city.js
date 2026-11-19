@@ -42,7 +42,7 @@ function windowTexture(base, lit) {
         if (isLit) {
           // Calm amber: dimmed so lit windows read as warm rooms, not a
           // blazing wall (the old near-white golds blew out under bloom).
-          const warm = pick(['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a']);
+          const warm = pick(['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a', '#6ab8c8', '#d97a9a', '#7ac8a0', '#a88ac8', '#cfd8e8', '#c98a3d']);
           g.fillStyle = warm; g.fillRect(px, py, cw - 6, ch - 8);
           g.fillStyle = 'rgba(255,255,255,.08)';
           g.fillRect(px, py, cw - 6, 3);
@@ -114,9 +114,12 @@ function initMaterials() {
     color: 0x1b6a7d, roughness: 0.14, metalness: 0.88, envMapIntensity: 1.5,
   });
   MAT.roof = new THREE.MeshStandardMaterial({ color: 0x3a3640, roughness: 0.95 });
+  MAT.bridgeDeck = new THREE.MeshStandardMaterial({ color: 0x2e3a4a, roughness: 0.9, metalness: 0.1 });
   MAT.awningPink = new THREE.MeshStandardMaterial({ color: 0xd94f7a, roughness: 0.7 });
   MAT.awningTeal = new THREE.MeshStandardMaterial({ color: 0x2fa8a0, roughness: 0.7 });
   MAT.awningGold = new THREE.MeshStandardMaterial({ color: 0xe8a33d, roughness: 0.7 });
+  MAT.awningPurple = new THREE.MeshStandardMaterial({ color: 0x8a5ac8, roughness: 0.7 });
+  MAT.awningCyan = new THREE.MeshStandardMaterial({ color: 0x2fa8d8, roughness: 0.7 });
 }
 
 // ---- small builders ----
@@ -217,7 +220,7 @@ export function buildCity(scene) {
     // centre dashes
     for (let x = -270; x < 270; x += 9) {
       const d = box(3.2, 0.02, 0.35,
-        new THREE.MeshStandardMaterial({ color: 0xd8c25a, roughness: 0.7 }), x, 0.04, z, scene);
+        new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.7 }), x, 0.04, z, scene);
       d.receiveShadow = false;
     }
   }
@@ -232,7 +235,7 @@ export function buildCity(scene) {
     }
     for (let z = -250; z < 250; z += 9) {
       box(0.35, 0.02, 3.2,
-        new THREE.MeshStandardMaterial({ color: 0xd8c25a, roughness: 0.7 }), x, 0.04, z, scene);
+        new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.7 }), x, 0.04, z, scene);
     }
   }
   // Crosswalk stripes at the main intersections.
@@ -285,7 +288,7 @@ export function buildCity(scene) {
   // ---- lift bridge (signature set-piece, at x=0 crossing the canal) ----
   const bridge = new THREE.Group();
   // deck (the road continues across)
-  const deck = box(13, 0.8, canalD + 8, MAT.asphalt, 0, 0.1, BRIDGE.z, bridge);
+  const deck = box(13, 0.8, canalD + 8, MAT.bridgeDeck, 0, 0.1, BRIDGE.z, bridge);
   // striped gates (yellow/black) at both ends
   const stripeTex = canvasTex(128, 32, (g, w, h) => {
     for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#111' : '#ffd23e'; g.fillRect(i * 16, 0, 16, h); }
@@ -327,10 +330,10 @@ export function buildCity(scene) {
   // blaze. ~1 in 3 windows lit now, so buildings read as dark masses
   // with scattered warm rooms.
   const facades = [
-    { base: '#3a4a63', lit: 0.35 }, { base: '#5a4632', lit: 0.3 },
-    { base: '#6b3a44', lit: 0.32 }, { base: '#2f3a4a', lit: 0.38 },
-    { base: '#7a6a55', lit: 0.28 }, { base: '#4a3a5a', lit: 0.32 },
-    { base: '#33505a', lit: 0.35 },
+    { base: '#3a6a7a', lit: 0.35 }, { base: '#8a4a5e', lit: 0.3 },
+    { base: '#5a7a4e', lit: 0.32 }, { base: '#4a6a9a', lit: 0.38 },
+    { base: '#6a5a8a', lit: 0.28 }, { base: '#a85a42', lit: 0.32 },
+    { base: '#7a6a3e', lit: 0.35 }, { base: '#5a4a6a', lit: 0.3 },
   ];
   const shopSigns = [
     ['NEON COLA', '#ff2e88'], ['TACO PALACE', '#ff5a3d'], ['DONUT DRIVE', '#ff9a3d'],
@@ -338,7 +341,7 @@ export function buildCity(scene) {
     ['SLICE RUNNER', '#ffd23e'], ['HARBOR RATS', '#c98a5a'], ['THREAD HOUSE', '#f2f2f2'],
     ['MABEL\u2019S PIE', '#ff8a9a'], ['VELVET ROPE', '#ffd23e'], ['K-VIBE 91.1', '#ff2ec8'],
   ];
-  const awnMats = [MAT.awningPink, MAT.awningTeal, MAT.awningGold];
+  const awnMats = [MAT.awningPink, MAT.awningTeal, MAT.awningGold, MAT.awningPurple, MAT.awningCyan];
   let signIdx = 0;
   // Glass Spire (tallest tower, finale heist site) at (120,-120)
   const spire = new THREE.Group();

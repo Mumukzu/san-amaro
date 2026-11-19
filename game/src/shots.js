@@ -115,7 +115,7 @@ function shotShootout(G) {
   // Two Saltjacks at ~9-11 m, scaled up, one in a white shirt, one in yellow.
   const enemies = [
     { x: -5.5, z: -219, shirt: 0xf2f2f2, scale: 1.18 },
-    { x: 4.5, z: -221, shirt: 0xffd23e, scale: 1.18 },
+    { x: 4.5, z: -221, shirt: 0x22e6ff, scale: 1.18 },
     { x: 0.5, z: -228, shirt: 0x2f7a3d, scale: 1.1 },
   ];
   G.stagedEnemies.forEach((e, i) => {
@@ -257,15 +257,9 @@ function shotJump(G) {
   sedan.group.rotation.set(0, Math.PI, 0); // facing north, jumping toward the camera
   setAirPitch(sedan, 0.32, 5.2); // nose-up, lifted
   G.playerCar.group.visible = false;
-  // FIX 3: the canal water must read — it is already shiny (metalness +
-  // envMap) with a sun glint + ripple rings; here we add a bright reflection
-  // streak right under the jump and lift the water's sun glint.
-  const streak = new THREE.Mesh(new THREE.PlaneGeometry(60, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffb36b, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
-  streak.rotation.x = -Math.PI / 2; streak.rotation.z = 0.5;
-  streak.position.set(0, 0.06, -282);
-  scene.add(streak);
-  G.shotProps.push(streak);
+  // NOTE: the wide warm "reflection streak" under the jump was removed —
+  // it read as a pale-yellow wash across the whole foreground. The canal
+  // water already reads via its shiny material + sun glint + ripple rings.
   // police: BAY-12 at the bridge approach, boxed in
   G.police[0].group.position.set(-18, 0, -252);
   G.police[0].group.rotation.set(0, Math.PI, 0);
