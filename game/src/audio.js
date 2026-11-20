@@ -157,29 +157,119 @@ export function nitroBoost() {
   src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.5);
 }
 
-// ---- city ambience (distant traffic hum + faint wind, looped) ----
-// A looped noise bed through a lowpass, with a slow LFO on the filter so
-// the hum breathes. Starts with the game; quiet enough to sit under the
-// radio and engine.
-let ambNodes = null;
+// ---- city ambience (AUDIO-06) ----
+// Four quiet looped layers through ONE shared bus into master, so mute
+// and pause/resume only ever touch the bus (ambNodes.g):
+//   hum   — the AUDIO-01 city hum (lowpass noise, slow LFO breathing)
+//   wind  — bandpass noise; a slow LFO on the gain makes gusts, a second
+//           slow LFO wanders the filter, so it never sounds looped
+//   ocean — lowpass noise with a slow swell LFO on the filter; its gain
+//           follows how close the player is to the north canal (coast)
+//   wash  — distant-traffic bed (bandpass noise, NOT per-car engines —
+//           AUDIO-03 already owns the nearest 3 cars); level follows zone
+// Zone mixes live in AMBIENCE_ZONES. ambienceUpdate() (called ~1 Hz from
+// animate) only re-targets gains — it creates NO nodes, so zone changes
+// can never accumulate. Layers are started once in ambienceStart() and
+// fully disconnected in ambienceStop() (the old stop left the LFO gain
+// and filter connected — fixed here).
+const AMBIENCE_ZONES = {
+  downtown:    { wash: 0.012, wind: 0.010 },
+  commercial:  { wash: 0.016, wind: 0.010 },
+  residential: { wash: 0.004, wind: 0.014 },
+  industrial:  { wash: 0.008, wind: 0.010 },
+  spire:       { wash: 0.010, wind: 0.012 },
+  plaza:       { wash: 0.010, wind: 0.012 },
+};
+const AMBIENCE_HUM = 0.02;        // constant city bed, every zone
+const AMBIENCE_OCEAN_MAX = 0.02;  // ocean gain at the water's edge
+const AMBIENCE_COAST_WIND = 0.006; // extra sea-breeze wind at the coast
+let ambNodes = null; // { g: bus, hum, wind, ocean, wash, zone, coast }
 export function ambienceStart() {
   if (!ensure() || ambNodes) return;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuffer(2); src.loop = true;
-  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220;
-  const g = ctx.createGain(); g.gain.value = 0.02;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
-  const lfoGain = ctx.createGain(); lfoGain.gain.value = 90;
-  lfo.connect(lfoGain).connect(f.frequency);
-  src.connect(f).connect(g).connect(master);
-  src.start(); lfo.start();
-  ambNodes = { src, lfo, g };
+  const bus = ctx.createGain(); bus.gain.value = 1.0; bus.connect(master);
+  const layer = (filterType, freq, q, gain) => {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(2); src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = filterType; f.frequency.value = freq;
+    if (q) f.Q.value = q;
+    const g = ctx.createGain(); g.gain.value = gain;
+    src.connect(f).connect(g).connect(bus);
+    src.start();
+    return { src, f, g };
+  };
+  const lfoPair = (target, freq, amount) => {
+    const lfo = ctx.createOscillator(); lfo.frequency.value = freq;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = amount;
+    lfo.connect(lfoGain).connect(target); lfo.start();
+    return { lfo, lfoGain };
+  };
+  const hum = layer('lowpass', 220, 0, AMBIENCE_HUM);
+  const humLfo = lfoPair(hum.f.frequency, 0.07, 90);
+  const wind = layer('bandpass', 400, 0.6, AMBIENCE_ZONES.commercial.wind);
+  const windGust = lfoPair(wind.g.gain, 0.09, 0.006);
+  const windWander = lfoPair(wind.f.frequency, 0.05, 150);
+  const ocean = layer('lowpass', 140, 0, 0);
+  const oceanSwell = lfoPair(ocean.f.frequency, 0.07, 60);
+  const wash = layer('bandpass', 300, 0.8, AMBIENCE_ZONES.commercial.wash);
+  ambNodes = {
+    g: bus,
+    hum: { ...hum, ...humLfo },
+    wind: { ...wind, lfo: windGust.lfo, lfoGain: windGust.lfoGain, lfo2: windWander.lfo, lfo2Gain: windWander.lfoGain },
+    ocean: { ...ocean, ...oceanSwell },
+    wash,
+    zone: 'commercial', coast: 0,
+  };
+}
+// Retarget the ambience mix for the player's zone + coastal proximity.
+// Creates NO nodes (gains only), so it is safe to call every second.
+// zone: 'downtown' | 'commercial' | 'residential' | 'industrial' |
+// 'spire' | 'plaza' (unknown -> commercial). coast: 0..1 (0 = inland,
+// 1 = at the water's edge).
+export function ambienceUpdate(zone, coast) {
+  if (!ambNodes || !ctx || paused) return;
+  const mix = AMBIENCE_ZONES[zone] || AMBIENCE_ZONES.commercial;
+  const c = Math.max(0, Math.min(1, coast || 0));
+  const t = ctx.currentTime;
+  ambNodes.wash.g.gain.setTargetAtTime(mix.wash, t, 0.5);
+  ambNodes.wind.g.gain.setTargetAtTime(mix.wind + c * AMBIENCE_COAST_WIND, t, 0.5);
+  ambNodes.ocean.g.gain.setTargetAtTime(c * AMBIENCE_OCEAN_MAX, t, 0.5);
+  ambNodes.zone = zone; ambNodes.coast = c;
+}
+export function ambienceZone() {
+  return ambNodes ? { zone: ambNodes.zone, coast: ambNodes.coast } : null;
+}
+// Test/introspection helper (numbers only, no node handles): the live
+// ambience mix, for tests and debugging.
+export function ambienceState() {
+  if (!ambNodes) return null;
+  return {
+    live: true, zone: ambNodes.zone, coast: ambNodes.coast,
+    bus: ambNodes.g.gain.value,
+    gains: {
+      hum: ambNodes.hum.g.gain.value, wind: ambNodes.wind.g.gain.value,
+      ocean: ambNodes.ocean.g.gain.value, wash: ambNodes.wash.g.gain.value,
+    },
+  };
 }
 export function ambienceStop() {
   if (!ambNodes) return;
-  try { ambNodes.src.stop(); ambNodes.lfo.stop(); } catch {}
-  try { if (ambNodes.g) ambNodes.g.disconnect(); } catch {}
-  ambNodes = null;
+  const n = ambNodes; ambNodes = null;
+  const stopLayer = (L) => {
+    if (!L) return;
+    try { L.src.stop(); } catch {}
+    try { L.src.disconnect(); } catch {}
+    try { L.f.disconnect(); } catch {}
+    try { L.g.disconnect(); } catch {}
+    for (const k of ['lfo', 'lfo2']) {
+      try { if (L[k]) L[k].stop(); } catch {}
+      try { if (L[k]) L[k].disconnect(); } catch {}
+    }
+    for (const k of ['lfoGain', 'lfo2Gain']) {
+      try { if (L[k]) L[k].disconnect(); } catch {}
+    }
+  };
+  stopLayer(n.hum); stopLayer(n.wind); stopLayer(n.ocean); stopLayer(n.wash);
+  try { n.g.disconnect(); } catch {}
 }
 
 // ---- siren (square wave alternating 720 / 940 Hz) ----
@@ -609,6 +699,10 @@ function trafficStopAll() {
   }
   trafficVoices = [];
 }
+// Test/introspection helper (numbers only): live traffic voices + gains.
+export function trafficState() {
+  return trafficVoices.map((v) => ({ id: v.id, profile: v.profile, gain: +v.gain.gain.value.toFixed(4) }));
+}
 
 // ---- character sounds (AUDIO-04) ----
 // All one-shots through master (mute respected). No loops, so pause /
@@ -891,7 +985,7 @@ export function resumePausedAudio(want = {}) {
   // ambience: recreate if it was on; if the nodes survived, ramp the gain back
   if (snap.amb) {
     if (!ambNodes) ambienceStart();
-    else if (ambNodes.g) ambNodes.g.gain.setTargetAtTime(0.02, ctx.currentTime, 0.08);
+    else if (ambNodes.g) ambNodes.g.gain.setTargetAtTime(1.0, ctx.currentTime, 0.08); // bus gain (AUDIO-06: layer gains are per-layer)
   }
   // radio: restart at the last station if it was playing (radioStart
   // stops any existing interval first, so no duplicate sequencer)

@@ -1277,6 +1277,7 @@ let walkPhase = 0;
 let lastJayStep = 0; // AUDIO-04: Jay footstep phase tracking (multiples of PI)
 let minimapTimer = 0;
 let trafficAudioT = 0; // AUDIO-03: throttle for the traffic-engine pool (2 Hz)
+let ambienceT = 0; // AUDIO-06: throttle for the zone/coast ambience mix (1 Hz)
 let missionHudT = 0; // throttle for the mission-timer HUD refresh (2 Hz)
 let hpShown = 100; // last HP value written to the HUD (regen throttle)
 let garageToastShown = false; // garage hint shown once per visit
@@ -1393,6 +1394,20 @@ function updateTrafficAudio() {
   }
   near.sort((a, b) => a.dist - b.dist);
   Audio.trafficUpdate(near.slice(0, 3));
+}
+
+// AUDIO-06: zone/coastal ambience — zone from the block the player is in
+// (same zoneFor() the minimap label uses), coast from distance to the
+// north canal water strip (city.js CANAL z -262..-302, x -330..330:
+// full ocean at the water's edge, fading to none 60 m inland).
+function updateAmbienceAudio() {
+  if (state.mode !== 'play') return;
+  const p = state.driving && state.car ? state.car.group.position : jay.group.position;
+  const bx = Math.max(-4, Math.min(3, Math.floor(p.x / 60)));
+  const bz = Math.max(-4, Math.min(3, Math.floor(p.z / 60)));
+  const zone = zoneFor(bx, bz);
+  const coast = Math.abs(p.x) <= 330 ? Math.max(0, Math.min(1, (-202 - p.z) / 60)) : 0;
+  Audio.ambienceUpdate(zone, coast);
 }
 
 // ---------- police (cruisers + heli + roadblocks) ----------
@@ -1873,6 +1888,9 @@ function animate() {
     // AUDIO-03: distant traffic engines (nearest 3 within 40 m), 2 Hz
     trafficAudioT += dt;
     if (trafficAudioT > 0.5) { trafficAudioT = 0; updateTrafficAudio(); }
+    // AUDIO-06: zone + coastal ambience mix, 1 Hz (gains only, no nodes)
+    ambienceT += dt;
+    if (ambienceT > 1.0) { ambienceT = 0; updateAmbienceAudio(); }
     pedestrians.update(dt, npcStep);
     if (!SHOT) idleCycle(plazaOfficer, state.time);
     // staged pedestrians / mid actors idle-sway (only in shot mode)
