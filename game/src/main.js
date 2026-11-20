@@ -59,8 +59,8 @@ const MOODS = {
   night: {
     sunDir: [0.3, 0.55, -0.4], skyTop: [0.01, 0.02, 0.08], skyMid: [0.05, 0.07, 0.18], skyHor: [0.14, 0.11, 0.24], skyBelow: [0.03, 0.03, 0.07],
     sunTint: [0.6, 0.7, 1.0], sunCore: [0.8, 0.85, 1.0],
-    sunColor: 0x9ab0ff, sunIntensity: 0.55, hemiSky: 0x2a3a6a, hemiGround: 0x0a0a12, hemiIntensity: 0.65,
-    ambColor: 0x1a2038, ambIntensity: 0.4, fog: 0x14142a, exposure: 1.0,
+    sunColor: 0x9ab0ff, sunIntensity: 0.8, hemiSky: 0x4a5a8a, hemiGround: 0x0a0a12, hemiIntensity: 0.65,
+    ambColor: 0x2a3455, ambIntensity: 0.4, fog: 0x14142a, exposure: 1.0,
     envSide: ['#14142a', '#1e1e3a', '#2a2a4a'], envTop: ['#0a0a1a', '#14142a', '#1e1e3a'], envBot: ['#08080f', '#0c0c14', '#101018'],
     spriteColor: 0xc8d8ff, spriteOpacity: 0.5, spriteScale: 90,
     dayLabel: 'DAY 1 · 22:15', moodLabel: 'NIGHT',
@@ -76,6 +76,10 @@ let MOODDEF = MOODS[MOOD];
 // at runtime without a reload.
 let skyMat = null;
 let sunSprite = null;
+// NIGHT-02: window glow follows the mood — assigned after buildCity.
+// Glow is ON only at Night (0.5); Day/Golden/Blue Hour get 0.
+const NIGHT_WINDOW_EMISSIVE = 0.5;
+let setNightWindows = null;
 
 // ---------- renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -201,6 +205,9 @@ function applyMood(mood) {
   hemi.intensity = def.hemiIntensity;
   amb.color.set(def.ambColor);
   amb.intensity = def.ambIntensity;
+  // NIGHT-02: lit windows glow only at Night; other moods get 0, so their
+  // facades render exactly as before (emissiveMap is lit-only on black).
+  if (setNightWindows) setNightWindows(mood === 'night' ? NIGHT_WINDOW_EMISSIVE : 0);
   scene.environment = makeEnvCube(def);
   document.documentElement.dataset.mood = mood;
   window.__mood = mood;
@@ -250,6 +257,10 @@ function setBloom(on) { bloomOn = !!on; }
 
 // ---------- build the world ----------
 const cityRefs = buildCity(scene);
+// NIGHT-02: wire the mood-driven window glow and apply the initial mood
+// (a ?mood=night load must start glowing; other moods start at 0).
+setNightWindows = cityRefs.setWindowEmissive;
+setNightWindows(MOOD === 'night' ? NIGHT_WINDOW_EMISSIVE : 0);
 // The city validation result (0 violations) — exposed for the HUD badge,
 // the shot harness, and the kit check.
 window.__cityValidation = cityRefs.cityValidation;

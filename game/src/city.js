@@ -68,43 +68,53 @@ function windowTexture(base, lit) {
   });
 }
 
-// Facade texture: a parametrised window grid so different building types
-// read differently — glass curtain walls (many small panes + floor bands),
-// concrete (fewer, larger inset windows + spandrel bands), houses (few big
-// windows), warehouses (a high strip of small windows). The old single
-// windowTexture painted every building with the same 8x14 grid, which is
-// why the whole city read as one repeated box.
+// Facade texture + matching lit-only emissive map. Both canvases are drawn
+// in ONE pass so the lit windows land on exactly the same panes: the
+// emissive canvas starts black and only lit windows are painted on it, so
+// the facade itself never glows — only the windows do. NIGHT-02: the RNG
+// calls happen in the same order as before, so the diffuse canvas is
+// pixel-identical to the old single-canvas version.
 function facadeTexture(base, lit, opts = {}) {
   const cols = opts.cols || 8, rows = opts.rows || 14;
   const inset = opts.inset ?? 3;
   const bandEvery = opts.bandEvery || 0;
   const bandColor = opts.bandColor || 'rgba(0,0,0,.15)';
   const litPalette = opts.litPalette || ['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a', '#cfe8ff', '#ffd9a0'];
-  return canvasTex(256, 448, (g, w, h) => {
-    g.fillStyle = base; g.fillRect(0, 0, w, h);
-    const cw = w / cols, ch = h / rows;
-    for (let y = 0; y < rows; y++) {
-      if (bandEvery && y % bandEvery === 0) { g.fillStyle = bandColor; g.fillRect(0, y * ch, w, 3); }
-      for (let x = 0; x < cols; x++) {
-        const px = x * cw + inset, py = y * ch + inset * 1.2;
-        if (rand() < lit) {
-          g.fillStyle = pick(litPalette);
-          g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
-          g.fillStyle = 'rgba(255,255,255,.08)';
-          g.fillRect(px, py, cw - inset * 2, 3);
-        } else {
-          // Unlit panes: a mid blue-grey (was near-black navy) so glass
-          // towers read as coloured glass in daylight instead of black slabs,
-          // and stay readable as panes at blue hour / night.
-          g.fillStyle = opts.unlit || 'rgba(88,118,150,.8)'; g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
-          g.fillStyle = 'rgba(255,255,255,.06)';
-          g.fillRect(px, py, cw - inset * 2, 3);
-        }
+  const c = document.createElement('canvas'); c.width = 256; c.height = 448;
+  const ce = document.createElement('canvas'); ce.width = 256; ce.height = 448;
+  const g = c.getContext('2d'), ge = ce.getContext('2d');
+  const w = 256, h = 448;
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  ge.fillStyle = '#000'; ge.fillRect(0, 0, w, h);
+  const cw = w / cols, ch = h / rows;
+  for (let y = 0; y < rows; y++) {
+    if (bandEvery && y % bandEvery === 0) { g.fillStyle = bandColor; g.fillRect(0, y * ch, w, 3); }
+    for (let x = 0; x < cols; x++) {
+      const px = x * cw + inset, py = y * ch + inset * 1.2;
+      const pw = cw - inset * 2, ph = ch - inset * 2.4;
+      if (rand() < lit) {
+        const warm = pick(litPalette);
+        g.fillStyle = warm; g.fillRect(px, py, pw, ph);
+        ge.fillStyle = warm; ge.fillRect(px, py, pw, ph);
+        g.fillStyle = 'rgba(255,255,255,.08)';
+        g.fillRect(px, py, pw, 3);
+      } else {
+        // Unlit panes: a mid blue-grey (was near-black navy) so glass
+        // towers read as coloured glass in daylight instead of black slabs,
+        // and stay readable as panes at blue hour / night.
+        g.fillStyle = opts.unlit || 'rgba(88,118,150,.8)'; g.fillRect(px, py, pw, ph);
+        g.fillStyle = 'rgba(255,255,255,.06)';
+        g.fillRect(px, py, pw, 3);
       }
     }
-    g.fillStyle = 'rgba(0,0,0,.08)';
-    for (let i = 0; i < 6; i++) g.fillRect(rand() * w, 0, 6, h);
-  });
+  }
+  g.fillStyle = 'rgba(0,0,0,.08)';
+  for (let i = 0; i < 6; i++) g.fillRect(rand() * w, 0, 6, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const emissiveTex = new THREE.CanvasTexture(ce);
+  emissiveTex.colorSpace = THREE.SRGBColorSpace; emissiveTex.anisotropy = 4;
+  return { map: tex, emissiveMap: emissiveTex };
 }
 function asphaltTexture(base = '#23232e') {
   return canvasTex(256, 256, (g, w, h) => {
@@ -493,6 +503,9 @@ export function buildCity(scene) {
   const citySummary = validationSummary(cityValidation);
   const cityBadge = validationBadge(cityValidation);
   const refs = { water: null, ripples: [], bridge: null, sign: null, palms: [], lamps: [], layout, cityValidation, citySummary, cityBadge };
+  // NIGHT-02: facade materials with a lit-only emissiveMap. applyMood drives
+  // their emissiveIntensity (0 in Day/Golden/Blue Hour, ~0.5 at Night).
+  const windowMats = [];
 
   // Sky handled in main.js (gradient dome + sun). Here: ground + streets.
   // Base ground (the whole island slab).
@@ -816,8 +829,9 @@ export function buildCity(scene) {
   const spireData = layout.buildings.find((b) => b.landmark);
   const spire = new THREE.Group();
   const spireTex = facadeTexture('#35608a', 0.18, { cols: 10, rows: 22, inset: 2, bandEvery: 4, bandColor: 'rgba(0,0,0,.35)', litPalette: ['#ffd9a0', '#cfe8ff'] });
-  const spireBody = new THREE.Mesh(new THREE.BoxGeometry(spireData.w, spireData.h, spireData.d),
-    new THREE.MeshStandardMaterial({ map: spireTex, roughness: 0.18, metalness: 0.7, envMapIntensity: 1.5 }));
+  const spireMat = new THREE.MeshStandardMaterial({ map: spireTex.map, emissiveMap: spireTex.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.18, metalness: 0.7, envMapIntensity: 1.5 });
+  windowMats.push(spireMat);
+  const spireBody = new THREE.Mesh(new THREE.BoxGeometry(spireData.w, spireData.h, spireData.d), spireMat);
   spireBody.position.y = spireData.h / 2; spire.add(spireBody);
   // three-step crown
   const crown1 = new THREE.Mesh(new THREE.BoxGeometry(26, 5, 26), MAT.spireGlass);
@@ -885,19 +899,27 @@ export function buildCity(scene) {
     const zoneFacades = FACADES[lb.zone] || FACADES.commercial;
     const f = zoneFacades[lb.facade % zoneFacades.length];
     const litJ = Math.min(0.45, f.lit + (lb.lit - 0.3));
-    let tex, mat;
+    let tex, emissiveTex, mat;
     if (f.kind === 'glass') {
-      tex = facadeTexture(f.base, litJ, { cols: 10, rows: 18, inset: 2, bandEvery: 3, bandColor: 'rgba(0,0,0,.15)', litPalette: ['#ffd9a0', '#cfe8ff', '#fff2cc', '#d9a55a'] });
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.22, metalness: 0.45, envMapIntensity: 1.3 });
+      const ft = facadeTexture(f.base, litJ, { cols: 10, rows: 18, inset: 2, bandEvery: 3, bandColor: 'rgba(0,0,0,.15)', litPalette: ['#ffd9a0', '#cfe8ff', '#fff2cc', '#d9a55a'] });
+      tex = ft.map; emissiveTex = ft.emissiveMap;
+      mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: emissiveTex, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.22, metalness: 0.45, envMapIntensity: 1.3 });
+      windowMats.push(mat);
     } else if (f.kind === 'house') {
-      tex = facadeTexture(f.base, litJ, { cols: 3, rows: 3, inset: 6, litPalette: ['#ffd9a0', '#fff2cc'] });
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05 });
+      const ft = facadeTexture(f.base, litJ, { cols: 3, rows: 3, inset: 6, litPalette: ['#ffd9a0', '#fff2cc'] });
+      tex = ft.map; emissiveTex = ft.emissiveMap;
+      mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: emissiveTex, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.85, metalness: 0.05 });
+      windowMats.push(mat);
     } else if (f.kind === 'industrial') {
-      tex = facadeTexture(f.base, litJ, { cols: 6, rows: 4, inset: 4, litPalette: ['#ffd9a0'] });
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.2 });
+      const ft = facadeTexture(f.base, litJ, { cols: 6, rows: 4, inset: 4, litPalette: ['#ffd9a0'] });
+      tex = ft.map; emissiveTex = ft.emissiveMap;
+      mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: emissiveTex, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9, metalness: 0.2 });
+      windowMats.push(mat);
     } else {
-      tex = facadeTexture(f.base, litJ, { cols: 7, rows: 12, inset: 4, bandEvery: 4, litPalette: ['#c98a3d', '#d9a55a', '#ffd9a0', '#cfe8ff'] });
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, metalness: 0.1 });
+      const ft = facadeTexture(f.base, litJ, { cols: 7, rows: 12, inset: 4, bandEvery: 4, litPalette: ['#c98a3d', '#d9a55a', '#ffd9a0', '#cfe8ff'] });
+      tex = ft.map; emissiveTex = ft.emissiveMap;
+      mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: emissiveTex, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8, metalness: 0.1 });
+      windowMats.push(mat);
     }
     const w = lb.w, d = lb.d, h = lb.h;
     const b = new THREE.Group();
@@ -1235,6 +1257,12 @@ export function buildCity(scene) {
     skyline.add(b);
   }
   scene.add(skyline);
+
+  // NIGHT-02: mood-driven window glow. setWindowEmissive(0) in Day/Golden/
+  // Blue Hour, ~0.5 at Night — only the lit windows emit, the facade never
+  // does (emissiveMap is lit-only on black).
+  refs.windowMats = windowMats;
+  refs.setWindowEmissive = (v) => { for (const m of windowMats) m.emissiveIntensity = v; };
 
   return refs;
 }
