@@ -178,6 +178,61 @@ export function gunshot() {
   th.connect(tg).connect(master); th.start(t); th.stop(t + 0.16);
 }
 
+// ---- collision & impact sounds (noise burst + low thump) ----
+// crash(severity, kind): one-shot impact. Severity drives loudness and
+// length (light = parking nudge, medium = street hit, hard = high-speed
+// crash); kind tunes the noise filter (car = metallic bandpass, building
+// = dull lowpass thud, object = in-between). Every envelope starts from
+// ~silence with a 6–8 ms attack ramp, so it never clicks, and the peaks
+// are budgeted so noise + thump stay well under 1.0 before the 0.5
+// master gain — no clipping. Nodes disconnect themselves on ended, so
+// repeated crashes can't leave orphans on master.
+// An audio-level throttle (0.12 s) backs up the gameplay cooldowns:
+// if two sources fire in the same frame (car + ram), the second is
+// dropped instead of piling up. Returns true when a sound was played.
+let crashLast = -1;
+export function crash(severity = 'medium', kind = 'car') {
+  if (!ensure()) return false;
+  const now = ctx.currentTime;
+  if (now - crashLast < 0.12) return false;
+  crashLast = now;
+  let sev = severity;
+  if (typeof sev === 'number') sev = sev < 0.34 ? 'light' : sev < 0.67 ? 'medium' : 'hard';
+  const P = {
+    light:  { noise: 0.10, thump: 0.14, dur: 0.12, thumpF: 110, noiseF: 1400 },
+    medium: { noise: 0.18, thump: 0.24, dur: 0.22, thumpF: 95,  noiseF: 1000 },
+    hard:   { noise: 0.28, thump: 0.34, dur: 0.35, thumpF: 80,  noiseF: 700 },
+  }[sev] || { noise: 0.18, thump: 0.24, dur: 0.22, thumpF: 95, noiseF: 1000 };
+  const t = now;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.4);
+  const f = ctx.createBiquadFilter();
+  if (kind === 'car') { f.type = 'bandpass'; f.frequency.value = P.noiseF; f.Q.value = 0.9; }
+  else { f.type = 'lowpass'; f.frequency.value = kind === 'building' ? 500 : 800; }
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(P.noise, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.001, t + P.dur);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + P.dur + 0.05);
+  const th = ctx.createOscillator(); th.type = 'sine';
+  th.frequency.setValueAtTime(P.thumpF, t);
+  th.frequency.exponentialRampToValueAtTime(32, t + P.dur * 0.7);
+  const tg = ctx.createGain();
+  tg.gain.setValueAtTime(0.0001, t);
+  tg.gain.exponentialRampToValueAtTime(P.thump, t + 0.008);
+  tg.gain.exponentialRampToValueAtTime(0.001, t + P.dur);
+  th.connect(tg).connect(master); th.start(t); th.stop(t + P.dur + 0.05);
+  const done = (() => {
+    let cleaned = false;
+    return () => {
+      if (cleaned) return; cleaned = true;
+      try { src.disconnect(); f.disconnect(); g.disconnect(); } catch {}
+      try { th.disconnect(); tg.disconnect(); } catch {}
+    };
+  })();
+  src.onended = done; th.onended = done;
+  return true;
+}
+
 // ---- UI blip + cash chime ----
 export function blip(freq = 880) {
   if (!ensure()) return;

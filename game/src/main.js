@@ -1418,6 +1418,7 @@ function updatePolice(dt) {
         state.speed = Math.max(0, state.speed - 4);
         u._ramCd = 1.5;
         damageCar(state.car, 8);
+        Audio.crash('hard', 'car');
         p.x -= Math.sin(u.group.rotation.y) * 5;
         p.z -= Math.cos(u.group.rotation.y) * 5;
       }
@@ -1583,6 +1584,13 @@ function circleCircle(px, pz, r, ox, oz, orr) {
   if (d >= min || d < 1e-6) return null;
   return { x: (dx / d) * (min - d), z: (dz / d) * (min - d) };
 }
+// Impact severity from speed (m/s): light < 5, medium 5–11, hard > 11.
+// Comet GT tops out ~19.5 m/s (52 km/h + nitro), so hard is a genuine
+// high-speed crash and light is a parking-lot nudge.
+function crashSeverity(speedMs) {
+  const v = Math.abs(speedMs || 0);
+  return v < 5 ? 'light' : v <= 11 ? 'medium' : 'hard';
+}
 // Player car vs the world: push out, damp speed, chip condition.
 let carHitCd = 0;
 function collidePlayerCar(dt) {
@@ -1591,30 +1599,32 @@ function collidePlayerCar(dt) {
   const p = car.group.position;
   carHitCd = Math.max(0, carHitCd - dt);
   let hit = false;
+  let hitKind = 'car'; // 'building' | 'object' | 'car' — first hit wins
   for (const box of getBuildingAABBs()) {
     const push = circleAABB(p.x, p.z, 2.0, box);
-    if (push) { p.x += push.x; p.z += push.z; hit = true; }
+    if (push) { p.x += push.x; p.z += push.z; if (!hit) hitKind = 'building'; hit = true; }
   }
   const fp = circleCircle(p.x, p.z, 2.0, FOUNTAIN.x, FOUNTAIN.z, FOUNTAIN.r);
-  if (fp) { p.x += fp.x; p.z += fp.z; hit = true; }
+  if (fp) { p.x += fp.x; p.z += fp.z; if (!hit) hitKind = 'object'; hit = true; }
   for (const c of getParkedCircles()) {
     const push = circleCircle(p.x, p.z, 2.0, c.x, c.z, c.r);
-    if (push) { p.x += push.x; p.z += push.z; hit = true; }
+    if (push) { p.x += push.x; p.z += push.z; if (!hit) hitKind = 'object'; hit = true; }
   }
   for (const t of traffic.cars) {
     const push = circleCircle(p.x, p.z, 2.0, t.group.position.x, t.group.position.z, 2.2);
-    if (push) { p.x += push.x; p.z += push.z; traffic.slowCar(t, 0.8); hit = true; }
+    if (push) { p.x += push.x; p.z += push.z; traffic.slowCar(t, 0.8); if (!hit) hitKind = 'car'; hit = true; }
   }
   if (roadblockActive) {
     for (const c of roadblockCars) {
       if (!c.group.visible) continue;
       const push = circleCircle(p.x, p.z, 2.0, c.group.position.x, c.group.position.z, 2.2);
-      if (push) { p.x += push.x; p.z += push.z; hit = true; }
+      if (push) { p.x += push.x; p.z += push.z; if (!hit) hitKind = 'car'; hit = true; }
     }
   }
   if (hit) {
+    const impactSpeed = Math.abs(state.speed);
     state.speed *= 0.55;
-    if (carHitCd <= 0) { carHitCd = 0.5; damageCar(car, 2); Audio.blip(180); }
+    if (carHitCd <= 0) { carHitCd = 0.5; damageCar(car, 2); Audio.crash(crashSeverity(impactSpeed), hitKind); }
   }
 }
 // Jay on foot vs the world: push out of buildings, hurt by traffic.
@@ -1639,7 +1649,7 @@ function collideJay(dt) {
       const dx = p.x - t.group.position.x, dz = p.z - t.group.position.z;
       const len = Math.hypot(dx, dz) || 1;
       p.x += (dx / len) * 3; p.z += (dz / len) * 3;
-      Audio.blip(140);
+      Audio.crash(crashSeverity(t.speed), 'car');
     }
   }
   // pedestrians: gentle push-out both ways
