@@ -106,9 +106,9 @@ function facadeTexture(base, lit, opts = {}) {
     for (let i = 0; i < 6; i++) g.fillRect(rand() * w, 0, 6, h);
   });
 }
-function asphaltTexture() {
+function asphaltTexture(base = '#23232e') {
   return canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#23232e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 900; i++) {
       g.fillStyle = `rgba(255,255,255,${rand() * 0.05})`;
       g.fillRect(rand() * w, rand() * h, 2, 2);
@@ -143,11 +143,24 @@ function glowTexture(inner, outer) {
 // ---- materials (shared) ----
 const MAT = {};
 function initMaterials() {
+  // ROAD-01: one asphalt per road class. Main avenues #555B60, ordinary
+  // streets #666B70 — no more single near-black asphalt for the whole city.
+  MAT.asphaltMain = new THREE.MeshStandardMaterial({
+    map: asphaltTexture('#555B60'), roughness: 0.55, metalness: 0.28, envMapIntensity: 0.9,
+  });
+  MAT.asphaltMain.map.wrapS = MAT.asphaltMain.map.wrapT = THREE.RepeatWrapping;
   MAT.asphalt = new THREE.MeshStandardMaterial({
-    map: asphaltTexture(), roughness: 0.55, metalness: 0.28, envMapIntensity: 0.9,
+    map: asphaltTexture('#666B70'), roughness: 0.55, metalness: 0.28, envMapIntensity: 0.9,
   });
   MAT.asphalt.map.wrapS = MAT.asphalt.map.wrapT = THREE.RepeatWrapping;
-  MAT.sidewalk = new THREE.MeshStandardMaterial({ color: 0x8a8290, roughness: 0.9, metalness: 0.05 });
+  MAT.sidewalk = new THREE.MeshStandardMaterial({ color: 0x74797d, roughness: 0.9, metalness: 0.05 });
+  // ROAD-01: curb (darker than the sidewalk, so the asphalt/sidewalk
+  // boundary reads as a real step) and road markings. The slight emissive
+  // is retroreflective paint: markings stay readable at night without
+  // glowing in daylight.
+  MAT.curb = new THREE.MeshStandardMaterial({ color: 0x5b6065, roughness: 0.9, metalness: 0.05 });
+  MAT.markWhite = new THREE.MeshStandardMaterial({ color: 0xe8e5d9, roughness: 0.7, emissive: 0xe8e5d9, emissiveIntensity: 0.22 });
+  MAT.markYellow = new THREE.MeshStandardMaterial({ color: 0xe8b93c, roughness: 0.7, emissive: 0xe8b93c, emissiveIntensity: 0.2 });
   MAT.concrete = new THREE.MeshStandardMaterial({ color: 0x6f6a72, roughness: 0.95, metalness: 0.02 });
   MAT.canalWall = new THREE.MeshStandardMaterial({ color: 0x5a5560, roughness: 0.9, metalness: 0.05 });
   MAT.steel = new THREE.MeshStandardMaterial({ color: 0x2e4a3f, roughness: 0.5, metalness: 0.75 });
@@ -167,8 +180,8 @@ function initMaterials() {
   MAT.signalAmber = new THREE.MeshStandardMaterial({ color: 0x2a1d08, emissive: 0xffb02a, emissiveIntensity: 0.7 });
   // Puddle: a dark, glossy decal that catches the sunset (wet-road look).
   MAT.puddle = new THREE.MeshStandardMaterial({ color: 0x1a2438, roughness: 0.08, metalness: 0.9, envMapIntensity: 1.6 });
-  MAT.crosswalk = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.8 });
-  MAT.stopLine = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.7 });
+  MAT.crosswalk = new THREE.MeshStandardMaterial({ color: 0xe8e5d9, roughness: 0.8, emissive: 0xe8e5d9, emissiveIntensity: 0.22 });
+  MAT.stopLine = new THREE.MeshStandardMaterial({ color: 0xe8e5d9, roughness: 0.7, emissive: 0xe8e5d9, emissiveIntensity: 0.22 });
   MAT.lampPole = new THREE.MeshStandardMaterial({ color: 0x2a2d36, roughness: 0.5, metalness: 0.6 });
   MAT.glass = new THREE.MeshStandardMaterial({ color: 0x9fd8e8, roughness: 0.12, metalness: 0.9, envMapIntensity: 1.4 });
   MAT.water = new THREE.MeshStandardMaterial({
@@ -357,9 +370,94 @@ function makeStopLine(x, z, axis, half, parent) {
     new THREE.PlaneGeometry(axis === 'x' ? 0.6 : half * 2, axis === 'x' ? half * 2 : 0.6),
     MAT.stopLine);
   bar.rotation.x = -Math.PI / 2;
-  bar.position.y = 0.05;
+  // ROAD-01: 0.055 sits above the crosswalk stripes (0.05) — the old
+  // shared 0.05 put the stop line coplanar with the outer stripe.
+  bar.position.y = 0.055;
   g.add(bar);
   g.position.set(x, 0, z);
+  parent.add(g);
+  return g;
+}
+
+// ---- ROAD-01: realistic road markings ----
+// Lane width is 3.5 m everywhere. Main avenues (half-width 7 m) carry 4
+// lanes; secondary (6 m) and residential (5 m) carry 2 travel lanes — the
+// extra width there is the parking bays / shoulders, so the widths already
+// match the lane counts and roadHalfWidth() is NOT changed.
+const ROAD_LANE_W = 3.5;
+// Clear zone around each intersection (crosswalk outer edge + margin):
+// longitudinal markings stop here, so none runs through a crossing.
+const ROAD_MARK_GAP = 7;
+// Marking height stack (asphalt 0.02): lines 0.035, dashes 0.04, arrows
+// 0.045, crosswalk 0.05, stop line 0.055 — nothing coplanar, no z-fight.
+
+// Intervals [a, b] along one street, between the intersections, clipped
+// to the asphalt strip (-278..278). The x=0 avenue is clipped at the
+// canal (z -256): the lift-bridge deck carries its own markings.
+function roadSegments(axis, coord) {
+  const segs = [];
+  let prev = -278;
+  for (const c of STREETS) {
+    const h = roadHalfWidth(streetClass(c));
+    if (c - h - ROAD_MARK_GAP - prev > 4) segs.push([prev, c - h - ROAD_MARK_GAP]);
+    prev = c + h + ROAD_MARK_GAP;
+  }
+  if (278 - prev > 4) segs.push([prev, 278]);
+  if (axis === 'z' && coord === 0) {
+    return segs.map(([a, b]) => [Math.max(a, -256), b]).filter(([a, b]) => b - a > 4);
+  }
+  return segs;
+}
+
+// Turn-arrow glyphs, painted once on canvas and shared by every arrow
+// plane. kind: 'straight', 'left' (straight + left), 'right' (straight +
+// right). The arrow points up in the canvas (+v); the plane is rotated
+// flat and the group is turned to the travel heading.
+function arrowTexture(kind) {
+  return canvasTex(128, 256, (g) => {
+    g.clearRect(0, 0, 128, 256);
+    g.strokeStyle = '#E8E5D9'; g.fillStyle = '#E8E5D9';
+    g.lineWidth = 15; g.lineCap = 'round'; g.lineJoin = 'round';
+    const head = (x, y, ang) => {
+      g.save(); g.translate(x, y); g.rotate(ang);
+      g.beginPath(); g.moveTo(0, -22); g.lineTo(-17, 12); g.lineTo(17, 12); g.closePath(); g.fill();
+      g.restore();
+    };
+    const straightGlyph = (cx) => {
+      g.beginPath(); g.moveTo(cx, 232); g.lineTo(cx, 62); g.stroke();
+      head(cx, 52, 0);
+    };
+    const turnGlyph = (cx, dir) => {
+      // shaft up, then bends 45 deg toward dir (-1 left, +1 right)
+      g.beginPath(); g.moveTo(cx, 232); g.lineTo(cx, 150); g.lineTo(cx + dir * 34, 108); g.stroke();
+      head(cx + dir * 34, 98, dir * Math.PI / 4);
+    };
+    if (kind === 'straight') straightGlyph(64);
+    else if (kind === 'left') { straightGlyph(92); turnGlyph(38, -1); }
+    else { straightGlyph(36); turnGlyph(90, 1); }
+  });
+}
+const ARROW_TEX = {};
+function arrowMat(kind) {
+  if (!ARROW_TEX[kind]) {
+    const tex = arrowTexture(kind);
+    ARROW_TEX[kind] = new THREE.MeshStandardMaterial({
+      map: tex, transparent: true, roughness: 0.7,
+      emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.22,
+    });
+  }
+  return ARROW_TEX[kind];
+}
+// A turn arrow on the road: (x, z) centre, heading = group rotation.y
+// that turns the canvas-up arrow to the direction of travel.
+function makeArrow(x, z, heading, kind, parent) {
+  const g = new THREE.Group();
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.2), arrowMat(kind));
+  p.rotation.x = -Math.PI / 2;
+  p.position.y = 0.045;
+  g.add(p);
+  g.position.set(x, 0, z);
+  g.rotation.y = heading;
   parent.add(g);
   return g;
 }
@@ -407,11 +505,16 @@ export function buildCity(scene) {
   // street gets its own half-width (main avenues 7 m, secondary 6 m,
   // residential 5 m), so the avenues genuinely read wider than the side
   // streets. Sidewalks sit at half-width + 1.6 m on both sides.
-  const streetMat = MAT.asphalt;
-  const dashMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.7 });
+  // ROAD-01: per-class asphalt (main #555B60, ordinary #666B70), yellow
+  // centre lines (double on main avenues, single otherwise), dashed white
+  // lane dividers on main avenues only, solid white edge lines, and a low
+  // curb on the sidewalk inner edge. Longitudinal markings are drawn per
+  // segment between intersections, so none crosses a crosswalk or stop
+  // line. The old centre dashes on every street are gone.
   for (const road of layout.roads) {
     const half = roadHalfWidth(road.cls);
     const w = half * 2;
+    const streetMat = road.cls === 'main' ? MAT.asphaltMain : MAT.asphalt;
     if (road.axis === 'x') {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(560, w), streetMat);
       s.rotation.x = -Math.PI / 2; s.position.set(0, 0.02, road.coord);
@@ -420,11 +523,6 @@ export function buildCity(scene) {
         const sw = new THREE.Mesh(new THREE.PlaneGeometry(560, 3.2), MAT.sidewalk);
         sw.rotation.x = -Math.PI / 2; sw.position.set(0, 0.05, road.coord + dz);
         scene.add(sw);
-      }
-      // centre dashes
-      for (let x = -270; x < 270; x += 9) {
-        const d = box(3.2, 0.02, 0.35, dashMat, x, 0.04, road.coord, scene);
-        d.receiveShadow = false;
       }
     } else {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(w, 560), streetMat);
@@ -435,14 +533,52 @@ export function buildCity(scene) {
         sw.rotation.x = -Math.PI / 2; sw.position.set(road.coord + dx, 0.05, 0);
         scene.add(sw);
       }
-      for (let z = -250; z < 250; z += 9) {
-        box(0.35, 0.02, 3.2, dashMat, road.coord, 0.04, z, scene);
+    }
+    // One long thin box per segment: (width across, lateral offset, y,
+    // material, segment start/end, height).
+    const line = (width, off, y, mat, a, b, h = 0.02) => {
+      const len = b - a, mid = (a + b) / 2;
+      if (road.axis === 'x') box(len, h, width, mat, mid, y, road.coord + off, scene);
+      else box(width, h, len, mat, road.coord + off, y, mid, scene);
+    };
+    for (const [a, b] of roadSegments(road.axis, road.coord)) {
+      // edge lines: solid white, just inside the asphalt edge
+      line(0.15, half - 0.4, 0.035, MAT.markWhite, a, b);
+      line(0.15, -(half - 0.4), 0.035, MAT.markWhite, a, b);
+      // centre line: double yellow on main avenues, single yellow otherwise
+      if (road.cls === 'main') {
+        line(0.15, 0.3, 0.035, MAT.markYellow, a, b);
+        line(0.15, -0.3, 0.035, MAT.markYellow, a, b);
+      } else {
+        line(0.15, 0, 0.035, MAT.markYellow, a, b);
+      }
+      // curbs: low ridge on the sidewalk inner edge
+      line(0.18, half + 0.09, 0.06, MAT.curb, a, b, 0.12);
+      line(0.18, -(half + 0.09), 0.06, MAT.curb, a, b, 0.12);
+      // lane dividers (main avenues only): dashed white at +/-3.5 m,
+      // 3 m dash every 9 m — the old rhythm, now in the right place
+      if (road.cls === 'main') {
+        for (const off of [-ROAD_LANE_W, ROAD_LANE_W]) {
+          for (let p = a + 1.5; p + 3 <= b; p += 9) {
+            const c = p + 1.5;
+            if (road.axis === 'x') box(3, 0.02, 0.15, MAT.markWhite, c, 0.04, road.coord + off, scene);
+            else box(0.15, 0.02, 3, MAT.markWhite, road.coord + off, 0.04, c, scene);
+          }
+        }
       }
     }
   }
-  // Crosswalks + stop lines at the five main-avenue intersections, and
-  // puddle decals on the main avenues (wet-road sunset sheen).
-  for (const [xc, zc] of [[0, 0], [120, 0], [-120, 0], [0, 120], [0, -120]]) {
+  // ROAD-01: crosswalks + stop lines at EVERY main-avenue intersection
+  // (17: both central axes at every grid line), stop lines on all four
+  // approaches — the old code only covered 5 intersections and only the
+  // east-west approaches. Puddle decals on the main avenues (wet-road
+  // sunset sheen).
+  const mainIntersections = [];
+  for (const c of STREETS) {
+    mainIntersections.push([0, c]);
+    if (c !== 0) mainIntersections.push([c, 0]);
+  }
+  for (const [xc, zc] of mainIntersections) {
     const hx = roadHalfWidth(streetClass(xc)); // north-south road half-width
     const hz = roadHalfWidth(streetClass(zc)); // east-west road half-width
     // Crosswalks: one on each approach. Crossing the east-west road
@@ -456,6 +592,40 @@ export function buildCity(scene) {
     // Stop lines on the east-west approaches, just outside the crossing road.
     makeStopLine(xc - hx - 1.2, zc, 'x', hz, scene);
     makeStopLine(xc + hx + 1.2, zc, 'x', hz, scene);
+    // Stop lines on the north-south approaches too.
+    makeStopLine(xc, zc - hz - 1.2, 'z', hx, scene);
+    makeStopLine(xc, zc + hz + 1.2, 'z', hx, scene);
+  }
+  // ROAD-01: turn arrows on the approaches to the five central
+  // intersections. Right-hand traffic: inner lane = straight + left,
+  // outer lane = straight + right (main roads); a single straight arrow
+  // on 2-lane approaches. Arrows sit just outside the crosswalk
+  // (crossing half-width + 8.5), clear of the stop line and the stripes.
+  for (const [xc, zc] of [[0, 0], [120, 0], [-120, 0], [0, 120], [0, -120]]) {
+    const hx = roadHalfWidth(streetClass(xc));
+    const hz = roadHalfWidth(streetClass(zc));
+    const ewCls = streetClass(zc); // east-west road class
+    const nsCls = streetClass(xc); // north-south road class
+    // East approach: traffic heads west (-x); right-hand lanes are north.
+    if (ewCls === 'main') {
+      makeArrow(xc + hx + 8.5, zc - 1.75, Math.PI / 2, 'left', scene);
+      makeArrow(xc + hx + 8.5, zc - 5.25, Math.PI / 2, 'right', scene);
+    } else makeArrow(xc + hx + 8.5, zc - 1.75, Math.PI / 2, 'straight', scene);
+    // West approach: traffic heads east (+x); right-hand lanes are south.
+    if (ewCls === 'main') {
+      makeArrow(xc - hx - 8.5, zc + 1.75, -Math.PI / 2, 'left', scene);
+      makeArrow(xc - hx - 8.5, zc + 5.25, -Math.PI / 2, 'right', scene);
+    } else makeArrow(xc - hx - 8.5, zc + 1.75, -Math.PI / 2, 'straight', scene);
+    // South approach: traffic heads north (-z); right-hand lanes are east.
+    if (nsCls === 'main') {
+      makeArrow(xc + 1.75, zc + hz + 8.5, 0, 'left', scene);
+      makeArrow(xc + 5.25, zc + hz + 8.5, 0, 'right', scene);
+    } else makeArrow(xc + 1.75, zc + hz + 8.5, 0, 'straight', scene);
+    // North approach: traffic heads south (+z); right-hand lanes are west.
+    if (nsCls === 'main') {
+      makeArrow(xc - 1.75, zc - hz - 8.5, Math.PI, 'left', scene);
+      makeArrow(xc - 5.25, zc - hz - 8.5, Math.PI, 'right', scene);
+    } else makeArrow(xc - 1.75, zc - hz - 8.5, Math.PI, 'straight', scene);
   }
   for (const px of [-160, -40, 80, 200]) makePuddle(px, 3.5, 2.2, 1.1, scene);
   for (const px of [-200, 20, 140]) makePuddle(px, -3.5, 1.8, 0.9, scene);
