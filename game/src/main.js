@@ -6,7 +6,7 @@ const THREE = globalThis.THREE;
 import { buildCity } from './city.js';
 import { zoneFor, STREETS } from './city-layout.js';
 import { buildCar, makeTraffic, makeParked, makePolice, setAirPitch } from './vehicles.js';
-import { buildJay, buildNadia, buildTheo, buildMara, buildPerson, walkCycle, aimPose, buildRifle, makePedestrians } from './people.js';
+import { buildJay, buildNadia, buildTheo, buildMara, buildPerson, buildPolice, buildDriver, walkCycle, idleCycle, aimPose, buildRifle, makePedestrians } from './people.js';
 import { MISSIONS, rankFor, XP_MAX } from './missions.js';
 import * as HUD from './hud.js';
 import * as Audio from './audio.js';
@@ -256,6 +256,16 @@ window.__cityValidation = cityRefs.cityValidation;
 window.__citySummary = cityRefs.citySummary;
 HUD.setCityBadge(cityRefs.cityBadge, cityRefs.cityValidation.passed);
 const traffic = makeTraffic(scene, 30);
+// Drivers in the traffic cars (standard cabins only — vans, trucks and
+// pickups have a different cab shape). A compact bust that reads through
+// the windshield; a full figure would not fit the low cabin.
+for (const c of traffic.cars) {
+  const name = c.group.userData.spec?.name;
+  if (name !== 'Marina Sedan' && name !== 'Bruiser' && name !== 'Flamingo' && name !== 'Sunset Cab') continue;
+  const d = buildDriver({});
+  d.group.position.set(-0.45, -0.45, 0.3);
+  c.group.add(d.group);
+}
 const parked = makeParked(scene, cityRefs.layout.parking, 18);
 const pedestrians = makePedestrians(scene, 60, cityRefs.layout);
 pedestrians.setFleeing(false);
@@ -277,6 +287,19 @@ for (let i = 0; i < 2; i++) {
   scene.add(c.group);
   roadblockCars.push(c);
 }
+// SAMPD officers on foot: two at the roadblock (appear with the cars)
+// and one beat cop standing watch at the plaza.
+const roadblockOfficers = [];
+for (let i = 0; i < 2; i++) {
+  const o = buildPolice({});
+  o.group.visible = false;
+  scene.add(o.group);
+  roadblockOfficers.push(o);
+}
+const plazaOfficer = buildPolice({ hairstyle: 'short' });
+plazaOfficer.group.position.set(-84, 0, 36);
+plazaOfficer.group.rotation.y = 2.2;
+scene.add(plazaOfficer.group);
 let roadblockActive = false;
 let roadblockT = 0;
 
@@ -322,7 +345,9 @@ for (let i = 0; i < 6; i++) {
 }
 const stagedEnemies = [];
 for (let i = 0; i < 3; i++) {
-  const p = buildPerson({ shirt: 0xf2f2f2, pants: 0x2a2a2e });
+  // Rico's crew: dark clothes, heavy brow, buzz cut, dark cap — not the
+  // generic white-shirt pedestrian the old code used.
+  const p = buildPerson({ shirt: 0x2a1a1a, pants: 0x1c1c22, face: 3, hairstyle: 'buzz', cap: true, capColor: 0x1c1c22 });
   p.group.visible = false;
   scene.add(p.group);
   stagedEnemies.push(p);
@@ -351,6 +376,7 @@ const G = {
   playerCar, sedanCar, prizeCar, jay, nadia, theo, mara,
   police, traffic, pedestrians, parked,
   stagedPeds, stagedEnemies, midTraffic, midPeds,
+  plazaOfficer, roadblockOfficers,
   shotProps: [], minimapState: null,
 };
 
@@ -1112,7 +1138,8 @@ function spawnTracer(from, dir, length, color) {
 function spawnEnemies(spots) {
   clearEnemies();
   for (const s of spots) {
-    const p = buildPerson({ shirt: 0xf2f2f2, pants: 0x2a2a2e });
+    // Rico's crew: dark clothes, heavy brow, buzz cut, dark cap.
+    const p = buildPerson({ shirt: 0x2a1a1a, pants: 0x1c1c22, face: 3, hairstyle: 'buzz', cap: true, capColor: 0x1c1c22 });
     p.group.position.set(s.x, 0, s.z);
     p.group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(p.group);
@@ -1314,7 +1341,7 @@ function updatePlayer(dt) {
       // turn Jay with A/D when not strafing? keep heading fixed; camera follows.
       if (strafe !== 0 && fwd === 0) jay.group.rotation.y += strafe * 1.6 * dt;
     } else {
-      walkCycle(jay, 0, 0, false);
+      idleCycle(jay, state.time);
     }
     Audio.engineSet(0, false);
   }
@@ -1362,7 +1389,7 @@ function updatePolice(dt) {
     // park the cruisers out of the way when clear
     for (const u of [police[0], police[1], extraCruisers[0], extraCruisers[1]]) { u.group.visible = false; u.speed = 0; }
     police[2].group.visible = false;
-    if (roadblockActive) { roadblockActive = false; for (const c of roadblockCars) c.group.visible = false; }
+    if (roadblockActive) { roadblockActive = false; for (const c of roadblockCars) c.group.visible = false; for (const o of roadblockOfficers) o.group.visible = false; }
     return;
   }
   // During an evade stage the cruisers ease off a little, so a good
@@ -1431,6 +1458,7 @@ function updatePolice(dt) {
   } else if (roadblockActive) {
     roadblockActive = false;
     for (const c of roadblockCars) c.group.visible = false;
+    for (const o of roadblockOfficers) o.group.visible = false;
   }
   // wanted escalation: sustained close pursuit raises the heat — +1 star
   // per 25 s while a cruiser is within 40 m (cap 5).
@@ -1487,6 +1515,11 @@ function placeRoadblock() {
     c.group.position.set(p.x + fwd.x * 40 + right.x * off * 3, 0, p.z + fwd.z * 40 + right.z * off * 3);
     c.group.rotation.y = Math.atan2(fwd.x, fwd.z) + Math.PI / 2;
     c.group.visible = true;
+    // an officer stands beside each cruiser, facing back toward the player
+    const o = roadblockOfficers[i];
+    o.group.position.set(p.x + fwd.x * 38 + right.x * (off * 3 + 2.5), 0, p.z + fwd.z * 38 + right.z * (off * 3 + 2.5));
+    o.group.rotation.y = Math.atan2(fwd.x, fwd.z) + Math.PI;
+    o.group.visible = true;
   }
 }
 
@@ -1769,6 +1802,7 @@ function animate() {
     if (!SHOT) updatePlayer(dt);
     traffic.update(dt);
     pedestrians.update(dt);
+    if (!SHOT) idleCycle(plazaOfficer, state.time);
     // staged pedestrians / mid actors idle-sway (only in shot mode)
     if (SHOT) {
       for (const w of stagedPeds) if (w.p.group.visible) { w.phase += dt * 2; walkCycle(w.p, w.phase, 3, w.fleeing); }

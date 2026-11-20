@@ -13,7 +13,7 @@ import { STREETS, streetClass } from './city-layout.js';
 function mat(color, rough = 0.35, metal = 0.55, extra = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
 }
-const GLASS = mat(0x101826, 0.12, 0.9, { envMapIntensity: 1.5 });
+const GLASS = mat(0x101826, 0.12, 0.9, { envMapIntensity: 1.5, transparent: true, opacity: 0.5 });
 const TYRE = mat(0x14141a, 0.95, 0.0);
 const RIM = mat(0xd8d8e0, 0.25, 0.9);
 const CHROME = mat(0xe8ecf2, 0.15, 1.0);
