@@ -10,7 +10,7 @@
 const THREE = globalThis.THREE;
 import {
   buildLayout, fixLayout, validationSummary, validationBadge,
-  roadHalfWidth, streetClass, STREETS,
+  roadHalfWidth, streetClass, STREETS, GRID_PITCH,
 } from './city-layout.js';
 
 function mulberry32(seed) {
@@ -68,7 +68,43 @@ function windowTexture(base, lit) {
   });
 }
 
-// Asphalt with a faint centre sheen (wet road).
+// Facade texture: a parametrised window grid so different building types
+// read differently — glass curtain walls (many small panes + floor bands),
+// concrete (fewer, larger inset windows + spandrel bands), houses (few big
+// windows), warehouses (a high strip of small windows). The old single
+// windowTexture painted every building with the same 8x14 grid, which is
+// why the whole city read as one repeated box.
+function facadeTexture(base, lit, opts = {}) {
+  const cols = opts.cols || 8, rows = opts.rows || 14;
+  const inset = opts.inset ?? 3;
+  const bandEvery = opts.bandEvery || 0;
+  const bandColor = opts.bandColor || 'rgba(0,0,0,.25)';
+  const litPalette = opts.litPalette || ['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a', '#cfe8ff', '#ffd9a0'];
+  return canvasTex(256, 448, (g, w, h) => {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    const cw = w / cols, ch = h / rows;
+    for (let y = 0; y < rows; y++) {
+      if (bandEvery && y % bandEvery === 0) { g.fillStyle = bandColor; g.fillRect(0, y * ch, w, 3); }
+      for (let x = 0; x < cols; x++) {
+        const px = x * cw + inset, py = y * ch + inset * 1.2;
+        if (rand() < lit) {
+          g.fillStyle = pick(litPalette);
+          g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
+          g.fillStyle = 'rgba(255,255,255,.08)';
+          g.fillRect(px, py, cw - inset * 2, 3);
+        } else {
+          // Unlit panes: a lighter blue-grey now (was near-black) so glass
+          // towers read as blue glass in daylight instead of black slabs.
+          g.fillStyle = opts.unlit || 'rgba(16,26,44,.8)'; g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
+          g.fillStyle = 'rgba(255,255,255,.06)';
+          g.fillRect(px, py, cw - inset * 2, 3);
+        }
+      }
+    }
+    g.fillStyle = 'rgba(0,0,0,.08)';
+    for (let i = 0; i < 6; i++) g.fillRect(rand() * w, 0, 6, h);
+  });
+}
 function asphaltTexture() {
   return canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = '#23232e'; g.fillRect(0, 0, w, h);
@@ -144,6 +180,36 @@ function initMaterials() {
   MAT.awningGold = new THREE.MeshStandardMaterial({ color: 0xe8a33d, roughness: 0.7 });
   MAT.awningPurple = new THREE.MeshStandardMaterial({ color: 0x8a5ac8, roughness: 0.7 });
   MAT.awningCyan = new THREE.MeshStandardMaterial({ color: 0x2fa8d8, roughness: 0.7 });
+  // ---- visual-upgrade materials ----
+  // Bridge: the old dark-green steel read as black in every shot. Painted
+  // teal-blue steel + a lighter deck, so the structure holds its shape.
+  MAT.bridgeSteel = new THREE.MeshStandardMaterial({ color: 0x4a7a8a, roughness: 0.42, metalness: 0.7, emissive: 0x2a4a5a, emissiveIntensity: 0.5 });
+  MAT.bridgeSteelLight = new THREE.MeshStandardMaterial({ color: 0x6a9aaa, roughness: 0.4, metalness: 0.65, emissive: 0x3a5a6a, emissiveIntensity: 0.5 });
+  MAT.bridgeDeckLight = new THREE.MeshStandardMaterial({ color: 0x5a6a7c, roughness: 0.85, metalness: 0.15, emissive: 0x1a2030, emissiveIntensity: 0.3 });
+  MAT.edgeWhite = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.5 });
+  MAT.edgeYellow = new THREE.MeshStandardMaterial({ color: 0xffd23e, roughness: 0.5 });
+  // Fountain + plaza: light stone and white marble so the fountain reads as
+  // architecture, not a dark cone; pale paving so the plaza is not a red void.
+  MAT.stoneLight = new THREE.MeshStandardMaterial({ color: 0xb8b0a0, roughness: 0.75 });
+  MAT.marble = new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.35, metalness: 0.05 });
+  MAT.pavingLight = new THREE.MeshStandardMaterial({ color: 0xa89e8c, roughness: 0.9 });
+  MAT.pavingDark = new THREE.MeshStandardMaterial({ color: 0x7a7268, roughness: 0.9 });
+  MAT.jetWater = new THREE.MeshStandardMaterial({ color: 0x9fd8e8, roughness: 0.1, metalness: 0.4, transparent: true, opacity: 0.75 });
+  MAT.spray = new THREE.MeshBasicMaterial({ color: 0xcfefff, transparent: true, opacity: 0.22, depthWrite: false });
+  MAT.hedge = new THREE.MeshStandardMaterial({ color: 0x2a5a34, roughness: 0.95 });
+  // Second palm frond tint + third shade-canopy tint: the streets were a
+  // monoculture of one green. Fronds/canopies are split across the tints
+  // by index in the instanced section below.
+  MAT.frond2 = new THREE.MeshStandardMaterial({ color: 0x4a8a3a, roughness: 0.85, side: THREE.DoubleSide });
+  MAT.canopy3 = new THREE.MeshStandardMaterial({ color: 0x7a8a3f, roughness: 0.9 });
+  // House roofs: slate, terracotta, brown.
+  MAT.roofTile = new THREE.MeshStandardMaterial({ color: 0x5a4a42, roughness: 0.9 });
+  MAT.roofSlate = new THREE.MeshStandardMaterial({ color: 0x4a5a6a, roughness: 0.9 });
+  MAT.roofTerra = new THREE.MeshStandardMaterial({ color: 0x8a5a42, roughness: 0.9 });
+  // Spire: bright blue glass + cyan edge light strips.
+  MAT.spireGlass = new THREE.MeshStandardMaterial({ color: 0x7ab8d8, roughness: 0.15, metalness: 0.85, envMapIntensity: 1.5 });
+  MAT.edgeCyan = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x22e6ff, emissiveIntensity: 1.6 });
+  MAT.lobbyGlow = new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffc95e, emissiveIntensity: 1.4 });
 }
 
 // ---- small builders ----
@@ -428,9 +494,18 @@ export function buildCity(scene) {
   }
 
   // ---- lift bridge (signature set-piece, at x=0 crossing the canal) ----
+  // Visual upgrade: the old dark-green steel read as a black silhouette in
+  // every shot and the LIFT BRIDGE sign sat so high (y=24.5) it was cut off
+  // by the frame. Now: painted teal-blue steel, white edge stripes, a mid
+  // crossbeam, floodlights on the deck, counterweights + pulley sheaves so
+  // the lifting mechanism reads as real machinery, thicker cables, a
+  // lighter deck with edge lines, and the sign lowered to y=20, enlarged,
+  // hung from the crossbeam — plus a second sign on the north face.
   const bridge = new THREE.Group();
-  // deck (the road continues across)
-  const deck = box(13, 0.8, canalD + 8, MAT.bridgeDeck, 0, 0.1, BRIDGE.z, bridge);
+  // deck (the road continues across) — lighter, with edge lines
+  const deck = box(13, 0.8, canalD + 8, MAT.bridgeDeckLight, 0, 0.1, BRIDGE.z, bridge);
+  for (const ex of [-6.2, 6.2]) box(0.3, 0.06, canalD + 8, MAT.edgeYellow, ex, 0.55, BRIDGE.z, bridge);
+  for (let i = 0; i < 5; i++) box(0.35, 0.06, 2.4, MAT.edgeWhite, 0, 0.55, BRIDGE.z - 16 + i * 8, bridge);
   // striped gates (yellow/black) at both ends
   const stripeTex = canvasTex(128, 32, (g, w, h) => {
     for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#111' : '#ffd23e'; g.fillRect(i * 16, 0, 16, h); }
@@ -440,43 +515,115 @@ export function buildCity(scene) {
       new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.6 }));
     gate.position.set(0, 1.4, BRIDGE.z + dz); bridge.add(gate);
   }
-  // two steel lift towers (A-frame legs + crossbeam)
+  // two steel lift towers (A-frame legs + crossbeams), painted steel
   for (const sx of [-8.5, 8.5]) {
     for (const sz of [-14, 14]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(1.6, 26, 1.6), MAT.steel);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(1.6, 26, 1.6), MAT.bridgeSteel);
       leg.position.set(sx, 13, BRIDGE.z + sz); bridge.add(leg);
+      // white edge stripe on the road-facing side of the leg
+      const stripe = box(0.18, 26, 0.3, MAT.edgeWhite, sx, 13, BRIDGE.z + sz + (sz < 0 ? 0.85 : -0.85), bridge);
+      stripe.castShadow = false;
+      // floodlight head on the inner face, aimed at the deck — fixture big
+      // enough to read, glow small enough not to float as a free orb
+      const fl = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.6), MAT.lobbyGlow);
+      fl.position.set(sx + (sx < 0 ? 1.0 : -1.0), 10, BRIDGE.z + sz); bridge.add(fl);
+      addGlow(bridge, sx + (sx < 0 ? 1.6 : -1.6), 10, BRIDGE.z + sz, 2.5, glowTexWarm);
+      // pulley sheave on top of the leg
+      const sheave = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.6, 12), MAT.bridgeSteelLight);
+      sheave.rotation.z = Math.PI / 2;
+      sheave.position.set(sx, 26.5, BRIDGE.z + sz); bridge.add(sheave);
+      // counterweight block hanging inside the tower frame
+      box(2.5, 6, 1.8, MAT.steelDark, sx, 9, BRIDGE.z + sz * 0.5, bridge);
     }
-    const beam = box(2.2, 1.8, 30, MAT.steelDark, sx, 26.5, BRIDGE.z, bridge);
+    const beam = box(2.2, 1.8, 30, MAT.bridgeSteelLight, sx, 26.5, BRIDGE.z, bridge);
+    // mid crossbeam — ties the legs together, gives the tower a real frame
+    box(2.0, 1.4, 30, MAT.bridgeSteel, sx, 13, BRIDGE.z, bridge);
     // red warning light on top
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
       new THREE.MeshStandardMaterial({ color: 0xff2a1a, emissive: 0xff2a1a, emissiveIntensity: 2 }));
     lamp.position.set(sx, 28, BRIDGE.z); bridge.add(lamp);
     addGlow(bridge, sx, 28, BRIDGE.z, 3.5, glowTexPink);
   }
-  // crossbeam sign: "LIFT BRIDGE" in neon
+  // LIFT BRIDGE signs, hung from the crossbeam on BOTH faces, low enough
+  // (y=16) to sit below the top-centre HUD block in bridge shots — the
+  // old y=20 put the sign right where the XP bar lives and the bar
+  // clipped the middle of the text.
   const signTex = signTexture('LIFT BRIDGE', '#22e6ff', '#0d1520');
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(11, 2.75),
-    new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 1.1, transparent: true }));
-  sign.position.set(0, 24.5, BRIDGE.z + 15.2); bridge.add(sign);
-  // cables (thin cylinders, diagonal)
+  for (const [sz, ry] of [[15.2, 0], [-15.2, Math.PI]]) {
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(13, 3.25),
+      new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 1.1, transparent: true }));
+    sign.position.set(0, 16, BRIDGE.z + sz); sign.rotation.y = ry; bridge.add(sign);
+    for (const hx of [-5, 5]) {
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 7.3, 4), MAT.steelDark);
+      rod.position.set(hx, 21.25, BRIDGE.z + sz); bridge.add(rod);
+    }
+  }
+  // cables: thicker now, diagonal to the deck ends + vertical to the
+  // counterweights, so the lift mechanism reads.
   for (const sx of [-8.5, 8.5]) {
-    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 30, 4), MAT.steelDark);
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 30, 4), MAT.steelDark);
     cable.position.set(sx, 14, BRIDGE.z - 7); cable.rotation.x = 0.5; bridge.add(cable);
     const cable2 = cable.clone(); cable2.position.z = BRIDGE.z + 7; cable2.rotation.x = -0.5; bridge.add(cable2);
+    for (const sz of [-7, 7]) {
+      const vc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 17, 4), MAT.steelDark);
+      vc.position.set(sx, 17.5, BRIDGE.z + sz); bridge.add(vc);
+    }
   }
   scene.add(bridge);
   refs.bridge = bridge;
 
   // ---- buildings (blocks) ----
-  // Fewer lit windows (was 0.4-0.6): the old density made whole facades
-  // blaze. ~1 in 3 windows lit now, so buildings read as dark masses
-  // with scattered warm rooms.
-  const facades = [
-    { base: '#3a6a7a', lit: 0.35 }, { base: '#8a4a5e', lit: 0.3 },
-    { base: '#5a7a4e', lit: 0.32 }, { base: '#4a6a9a', lit: 0.38 },
-    { base: '#6a5a8a', lit: 0.28 }, { base: '#a85a42', lit: 0.32 },
-    { base: '#7a6a3e', lit: 0.35 }, { base: '#5a4a6a', lit: 0.3 },
-  ];
+  // Visual upgrade: the old 8 saturated bases (#3a6a7a teal, #8a4a5e pink,
+  // #5a7a4e green...) painted every building one flat colour with the same
+  // 8x14 window grid — the city read as repeated coloured boxes. Now each
+  // ZONE has its own architectural identity, with material-based,
+  // desaturated palettes and a different facade texture per kind:
+  //   downtown  — blue-glass curtain walls + grey concrete towers
+  //   commercial — brick / warm concrete with balconies and cornices
+  //   residential — pastel houses with pitched roofs, porches, chimneys
+  //   industrial — muted warehouses with monitor roofs + roller doors
+  const FACADES = {
+    downtown: [
+      { kind: 'glass', base: '#2a4a6a', lit: 0.22 }, { kind: 'glass', base: '#1e3a55', lit: 0.18 },
+      { kind: 'glass', base: '#3a5a7a', lit: 0.25 }, { kind: 'concrete', base: '#8a8578', lit: 0.3 },
+      { kind: 'concrete', base: '#6a6a72', lit: 0.28 }, { kind: 'concrete', base: '#9a8a7a', lit: 0.3 },
+      { kind: 'glass', base: '#4a6a7a', lit: 0.2 }, { kind: 'concrete', base: '#7a7468', lit: 0.26 },
+    ],
+    commercial: [
+      { kind: 'concrete', base: '#7a6a5e', lit: 0.32 }, { kind: 'concrete', base: '#8a7a6a', lit: 0.3 },
+      { kind: 'concrete', base: '#5a6a6e', lit: 0.3 }, { kind: 'brick', base: '#8a5a48', lit: 0.3 },
+      { kind: 'concrete', base: '#9a8a7a', lit: 0.32 }, { kind: 'glass', base: '#3a5a6a', lit: 0.25 },
+    ],
+    residential: [
+      { kind: 'house', base: '#c8b8a0', lit: 0.4 }, { kind: 'house', base: '#a8b8c8', lit: 0.4 },
+      { kind: 'house', base: '#d8c8b8', lit: 0.4 }, { kind: 'house', base: '#b8c8b0', lit: 0.4 },
+      { kind: 'house', base: '#c8a8a8', lit: 0.4 },
+    ],
+    industrial: [
+      { kind: 'industrial', base: '#6a6a60', lit: 0.15 }, { kind: 'industrial', base: '#7a5a44', lit: 0.15 },
+      { kind: 'industrial', base: '#5a6a5a', lit: 0.15 }, { kind: 'industrial', base: '#5a5a6a', lit: 0.15 },
+    ],
+  };
+  // Placement on a building's street-facing side: `along` is the distance
+  // along the front face from its centre (positive = right when facing the
+  // front from the street), `out` the distance out from the face. Returns
+  // the local position + the y-rotation a front attachment needs.
+  function frontPlacement(front, w, d, along, out) {
+    if (front === '+z') return { x: along, z: d / 2 + out, ry: 0 };
+    if (front === '-z') return { x: -along, z: -d / 2 - out, ry: Math.PI };
+    if (front === '+x') return { x: w / 2 + out, z: -along, ry: Math.PI / 2 };
+    return { x: -w / 2 - out, z: along, ry: -Math.PI / 2 };
+  }
+  // Is this block bounded by two non-residential streets on adjacent sides?
+  // Those buildings sit on a real corner and get a glass corner column +
+  // an entrance canopy, so intersections read as designed corners.
+  function isCornerBuilding(lb) {
+    const w = streetClass(lb.bx * GRID_PITCH) !== 'residential';
+    const e = streetClass((lb.bx + 1) * GRID_PITCH) !== 'residential';
+    const s = streetClass(lb.bz * GRID_PITCH) !== 'residential';
+    const n = streetClass((lb.bz + 1) * GRID_PITCH) !== 'residential';
+    return (w || e) && (s || n);
+  }
   const shopSigns = [
     ['NEON COLA', '#ff2e88'], ['TACO PALACE', '#ff5a3d'], ['DONUT DRIVE', '#ff9a3d'],
     ['SURF SHOP', '#22e6ff'], ['NEON NAILS', '#c86bff'], ['PALM & PISTON', '#2affc8'],
@@ -485,21 +632,49 @@ export function buildCity(scene) {
   ];
   const awnMats = [MAT.awningPink, MAT.awningTeal, MAT.awningGold, MAT.awningPurple, MAT.awningCyan];
   let signIdx = 0;
-  // Glass Spire (tallest tower, finale heist site) — now on its own plot,
-  // block (1,-2), centre (90,-90), inside a block instead of standing on
-  // an intersection.
+  // Glass Spire (tallest tower, finale heist site) — on its own plot,
+  // block (1,-2), centre (90,-90). Visual upgrade: the old spire was a
+  // dark box whose neon ring only existed when a shot added it, so in most
+  // frames it read as nothing special. Now it is a permanent landmark in
+  // every shot: blue glass curtain wall, a three-step crown, a permanent
+  // green halo ring + a vertical face ring, cyan edge-light strips up all
+  // four corners, a glowing beacon, a stone podium and a lit entrance.
   const spireData = layout.buildings.find((b) => b.landmark);
   const spire = new THREE.Group();
-  const spireTex = windowTexture('#2a3a55', 0.4);
+  const spireTex = facadeTexture('#35608a', 0.18, { cols: 10, rows: 22, inset: 2, bandEvery: 4, bandColor: 'rgba(0,0,0,.35)', litPalette: ['#ffd9a0', '#cfe8ff'] });
   const spireBody = new THREE.Mesh(new THREE.BoxGeometry(spireData.w, spireData.h, spireData.d),
-    new THREE.MeshStandardMaterial({ map: spireTex, roughness: 0.25, metalness: 0.6, envMapIntensity: 1.2 }));
+    new THREE.MeshStandardMaterial({ map: spireTex, roughness: 0.18, metalness: 0.7, envMapIntensity: 1.5 }));
   spireBody.position.y = spireData.h / 2; spire.add(spireBody);
-  const spireTop = new THREE.Mesh(new THREE.BoxGeometry(20, 10, 20), MAT.glass);
-  spireTop.position.y = spireData.h + 5; spire.add(spireTop);
+  // three-step crown
+  const crown1 = new THREE.Mesh(new THREE.BoxGeometry(26, 5, 26), MAT.spireGlass);
+  crown1.position.y = spireData.h + 2.5; spire.add(crown1);
+  const crown2 = new THREE.Mesh(new THREE.BoxGeometry(18, 5, 18), MAT.spireGlass);
+  crown2.position.y = spireData.h + 7.5; spire.add(crown2);
+  const crown3 = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 10), MAT.spireGlass);
+  crown3.position.y = spireData.h + 13; spire.add(crown3);
   const spireTip = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.2, 12, 6),
     new THREE.MeshStandardMaterial({ color: 0xff2e88, emissive: 0xff2e88, emissiveIntensity: 1.3 }));
-  spireTip.position.y = spireData.h + 16; spire.add(spireTip);
-  addGlow(spire, 0, spireData.h + 16, 0, 6, glowTexPink);
+  spireTip.position.y = spireData.h + 22; spire.add(spireTip);
+  addGlow(spire, 0, spireData.h + 22, 0, 6, glowTexPink);
+  // permanent neon rings: a horizontal halo around the tower + a vertical
+  // ring on the south face (the old shots added a ring per-shot; now the
+  // landmark carries its own)
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(20, 0.35, 8, 48),
+    new THREE.MeshStandardMaterial({ color: 0x2aff5a, emissive: 0x2aff5a, emissiveIntensity: 2.4 }));
+  halo.rotation.x = Math.PI / 2; halo.position.y = 52; spire.add(halo);
+  const faceRing = new THREE.Mesh(new THREE.TorusGeometry(5, 0.35, 8, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2aff5a, emissive: 0x2aff5a, emissiveIntensity: 2.4 }));
+  faceRing.position.set(0, 68, spireData.d / 2 + 1); spire.add(faceRing);
+  // cyan edge-light strips up all four vertical corners
+  for (const ex of [-17, 17]) for (const ez of [-17, 17]) {
+    box(0.35, spireData.h, 0.35, MAT.edgeCyan, ex, spireData.h / 2, ez, spire);
+  }
+  // stone podium + lit entrance on the south face
+  box(40, 4, 40, MAT.stoneLight, 0, 2, 0, spire);
+  box(10, 0.3, 3, MAT.marble, 0, 3.4, spireData.d / 2 + 1.5, spire);
+  const lobby = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), MAT.lobbyGlow);
+  lobby.position.set(0, 1.8, spireData.d / 2 + 0.15); spire.add(lobby);
+  addGlow(spire, 0, 2, spireData.d / 2 + 2, 6, glowTexWarm);
   spire.position.set(spireData.x, 0, spireData.z); scene.add(spire);
 
   // Shopfront helper: builds the storefront (dark front + neon sign +
@@ -526,40 +701,144 @@ export function buildCity(scene) {
   }
 
   // Buildings from the layout: each one sits inside its plot (never on a
-  // road), with a zone-driven height, a facade variant, and a shopfront on
-  // the street-facing side.
+  // road), with a zone-driven height, a zone facade, and a shopfront on the
+  // street-facing side. The SHAPE is zone-specific now, not just the colour:
+  // downtown towers get stepped crowns and corner fins, commercial blocks
+  // get cornices and balconies, houses get pitched roofs + porches +
+  // chimneys, warehouses get monitor roofs + roller doors.
   for (const lb of layout.buildings) {
     if (lb.landmark) continue;
-    const f = facades[lb.facade % facades.length];
-    const tex = windowTexture(f.base, lb.lit);
+    const zoneFacades = FACADES[lb.zone] || FACADES.commercial;
+    const f = zoneFacades[lb.facade % zoneFacades.length];
+    const litJ = Math.min(0.45, f.lit + (lb.lit - 0.3));
+    let tex, mat;
+    if (f.kind === 'glass') {
+      tex = facadeTexture(f.base, litJ, { cols: 10, rows: 18, inset: 2, bandEvery: 3, bandColor: 'rgba(0,0,0,.35)', litPalette: ['#ffd9a0', '#cfe8ff', '#fff2cc', '#d9a55a'] });
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.22, metalness: 0.65, envMapIntensity: 1.3 });
+    } else if (f.kind === 'house') {
+      tex = facadeTexture(f.base, litJ, { cols: 3, rows: 3, inset: 6, litPalette: ['#ffd9a0', '#fff2cc'] });
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05 });
+    } else if (f.kind === 'industrial') {
+      tex = facadeTexture(f.base, litJ, { cols: 6, rows: 4, inset: 4, litPalette: ['#ffd9a0'] });
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.2 });
+    } else {
+      tex = facadeTexture(f.base, litJ, { cols: 7, rows: 12, inset: 4, bandEvery: 4, litPalette: ['#c98a3d', '#d9a55a', '#ffd9a0', '#cfe8ff'] });
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, metalness: 0.1 });
+    }
     const w = lb.w, d = lb.d, h = lb.h;
     const b = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.45, envMapIntensity: 0.9 }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     body.position.y = h / 2; b.add(body);
-    // setback: a smaller upper box on taller buildings
-    if (h > 30) {
-      const up = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.28, d * 0.6),
-        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.45 }));
-      up.position.y = h + h * 0.14; b.add(up);
-    }
-    // roof props: AC units, water tower, antenna
+    const faceW = (lb.front === '+x' || lb.front === '-x') ? d : w;
     const roofY = h + 0.4;
-    if (rand() < 0.8) box(range(2, 4), 1.2, range(2, 3.5), MAT.roof, range(-w / 4, w / 4), roofY + 0.6, range(-d / 4, d / 4), b);
-    if (rand() < 0.5) {
-      const wt = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 3, 8), MAT.roof);
-      wt.position.set(range(-w / 4, w / 4), roofY + 1.5, range(-d / 4, d / 4)); b.add(wt);
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.6, 8), MAT.roof);
-      cone.position.set(wt.position.x, roofY + 3.8, wt.position.z); b.add(cone);
+    if (lb.zone === 'downtown') {
+      // Stepped crown: two shrinking boxes, so the skyline steps instead of
+      // ending in one flat slab. The tallest towers get a beacon.
+      const c1 = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, h * 0.10, d * 0.62), mat);
+      c1.position.y = h + h * 0.05; b.add(c1);
+      const c2 = new THREE.Mesh(new THREE.BoxGeometry(w * 0.4, h * 0.08, d * 0.4), mat);
+      c2.position.y = h + h * 0.10 + h * 0.04; b.add(c2);
+      if (h >= 44) {
+        const fin = box(0.5, h * 0.92, 1.6, MAT.spireGlass, -w / 2 + 0.4, h * 0.46, d / 2 + 0.4, b);
+        fin.castShadow = false;
+        if (h >= 58) {
+          const bc = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6),
+            new THREE.MeshStandardMaterial({ color: 0xff2a1a, emissive: 0xff2a1a, emissiveIntensity: 2 }));
+          bc.position.y = h + h * 0.18 + 1; b.add(bc);
+          addGlow(b, 0, h + h * 0.18 + 1, 0, 5, glowTexPink);
+        }
+      }
+      // cornice lip on concrete towers
+      if (f.kind !== 'glass') box(w + 0.8, 0.6, d + 0.8, MAT.concrete, 0, h + 0.3, 0, b);
+    } else if (lb.zone === 'commercial') {
+      // cornice + balconies on the front face + a small setback if tall
+      box(w + 0.6, 0.5, d + 0.6, MAT.concrete, 0, h + 0.25, 0, b);
+      if (h > 16) {
+        for (const by of [8, 13]) {
+          if (by > h - 3) continue;
+          const p = frontPlacement(lb.front, w, d, 0, 0.7);
+          const slab = box(faceW * 0.5, 0.25, 1.4, MAT.concrete, p.x, by, p.z, b);
+          slab.rotation.y = p.ry;
+          const rail = box(faceW * 0.5, 0.8, 0.1, MAT.benchIron, p.x, by + 0.5, p.z + (p.ry === 0 ? 0.65 : p.ry === Math.PI ? -0.65 : 0), b);
+          rail.rotation.y = p.ry;
+          if (p.ry === Math.PI / 2 || p.ry === -Math.PI / 2) {
+            rail.position.set(p.x + (p.ry === Math.PI / 2 ? 0.65 : -0.65), by + 0.5, p.z);
+          }
+        }
+      }
+      if (h > 30) {
+        const up = new THREE.Mesh(new THREE.BoxGeometry(w * 0.6, h * 0.2, d * 0.6), mat);
+        up.position.y = h + h * 0.1; b.add(up);
+      }
+    } else if (lb.zone === 'residential') {
+      // Pitched roof: a triangular prism (extruded triangle) + chimney +
+      // porch + door. This is the single biggest silhouette change in the
+      // upgrade — houses stop being small grey boxes.
+      const roofH = d * 0.35;
+      const roofMat = pick([MAT.roofTile, MAT.roofSlate, MAT.roofTerra]);
+      const tri = new THREE.Shape();
+      tri.moveTo(-d / 2 - 0.4, 0); tri.lineTo(d / 2 + 0.4, 0); tri.lineTo(0, roofH); tri.closePath();
+      const roofGeo = new THREE.ExtrudeGeometry(tri, { depth: w + 0.8, bevelEnabled: false });
+      const roof = new THREE.Mesh(roofGeo, roofMat);
+      roof.rotation.y = -Math.PI / 2;
+      roof.position.set((w + 0.8) / 2, h, 0);
+      b.add(roof);
+      box(1.2, 2.2, 1.2, MAT.roofTile, w * 0.25, h + roofH * 0.6, d * 0.15, b);
+      const doorP = frontPlacement(lb.front, w, d, 0, 0.1);
+      const door = box(1.3, 2.4, 0.15, new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.8 }), doorP.x, 1.2, doorP.z, b);
+      door.rotation.y = doorP.ry;
+      const porchP = frontPlacement(lb.front, w, d, 0, 1.2);
+      const porch = box(3.2, 0.25, 2.0, MAT.pavingLight, porchP.x, 0.35, porchP.z, b);
+      porch.rotation.y = porchP.ry;
+      const porchRoof = box(3.4, 0.2, 2.2, roofMat, porchP.x, 2.7, porchP.z, b);
+      porchRoof.rotation.y = porchP.ry;
+      for (const pa of [-1.3, 1.3]) {
+        const pp = frontPlacement(lb.front, w, d, pa, 2.0);
+        box(0.15, 2.6, 0.15, MAT.benchWood, pp.x, 1.3, pp.z, b);
+      }
+    } else if (lb.zone === 'industrial') {
+      // Monitor roof (raised centre strip with a warm strip window) +
+      // roller door + loading dock on the front.
+      box(w * 0.7, 2, d * 0.4, MAT.roof, 0, h + 1, 0, b);
+      box(w * 0.7, 0.5, 0.12, MAT.lobbyGlow, 0, h + 1, d * 0.2 + 0.06, b);
+      const doorP = frontPlacement(lb.front, w, d, 0, 0.15);
+      const roller = box(6, 4, 0.3, new THREE.MeshStandardMaterial({ color: 0x3a3a42, roughness: 0.6, metalness: 0.5 }), doorP.x, 2, doorP.z, b);
+      roller.rotation.y = doorP.ry;
+      const dockP = frontPlacement(lb.front, w, d, 0, 1.6);
+      const dock = box(7, 0.4, 3, MAT.concrete, dockP.x, 0.2, dockP.z, b);
+      dock.rotation.y = dockP.ry;
+      if (rand() < 0.7) {
+        const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.4, 8), MAT.steelDark);
+        vent.position.set(range(-w / 4, w / 4), h + 1.2, range(-d / 4, d / 4)); b.add(vent);
+      }
     }
-    if (rand() < 0.6) {
-      const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 6, 4), MAT.steelDark);
-      ant.position.set(range(-w / 3, w / 3), roofY + 3, range(-d / 3, d / 3)); b.add(ant);
+    // Corner buildings (downtown/commercial): a glass corner column + an
+    // entrance canopy, so intersections read as designed corners.
+    if ((lb.zone === 'downtown' || lb.zone === 'commercial') && h > 14 && isCornerBuilding(lb)) {
+      const cp = frontPlacement(lb.front, w, d, -(faceW / 2 - 1), 0.6);
+      box(1.8, h * 0.9, 1.8, MAT.spireGlass, cp.x, h * 0.45, cp.z, b);
+      const cn = frontPlacement(lb.front, w, d, 0, 1.2);
+      const canopy = box(faceW * 0.3, 0.2, 2.2, MAT.awningTeal, cn.x, 2.8, cn.z, b);
+      canopy.rotation.y = cn.ry;
+    }
+    // roof props: AC units, water tower, antenna (downtown/commercial only —
+    // houses have chimneys, warehouses have vents)
+    if (lb.zone === 'downtown' || lb.zone === 'commercial') {
+      if (rand() < 0.8) box(range(2, 4), 1.2, range(2, 3.5), MAT.roof, range(-w / 4, w / 4), roofY + 0.6, range(-d / 4, d / 4), b);
+      if (rand() < 0.5) {
+        const wt = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 3, 8), MAT.roof);
+        wt.position.set(range(-w / 4, w / 4), roofY + 1.5, range(-d / 4, d / 4)); b.add(wt);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.6, 8), MAT.roof);
+        cone.position.set(wt.position.x, roofY + 3.8, wt.position.z); b.add(cone);
+      }
+      if (rand() < 0.6) {
+        const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 6, 4), MAT.steelDark);
+        ant.position.set(range(-w / 3, w / 3), roofY + 3, range(-d / 3, d / 3)); b.add(ant);
+      }
     }
     // ground-floor shop front on the street-facing side
     if (lb.shop) {
       const [name, col] = shopSigns[signIdx++ % shopSigns.length];
-      const faceW = (lb.front === '+x' || lb.front === '-x') ? d : w;
       const faceD = (lb.front === '+x' || lb.front === '-x') ? w : d;
       addShopfront(b, faceW, faceD, lb.front, name, col);
     }
@@ -568,17 +847,66 @@ export function buildCity(scene) {
   }
 
   // ---- Sunset Plaza + fountain (block (-2,0), centre (-90, 30)) ----
+  // Visual upgrade: the old fountain was a grey basin + a concrete post —
+  // it read as a dark cone, and the plaza was one big empty red slab. Now
+  // it is a real piece of civic architecture: concentric paving rings, a
+  // light-stone basin with a marble rim and rim lights, a two-tier
+  // pedestal + upper bowl, a central jet with a spray cone, four angled
+  // side jets with splash spheres, and a hedge ring so the plaza reads as
+  // a designed public square, not empty ground.
   const plaza = new THREE.Group();
-  const slab = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 0.3, 24), MAT.sidewalk);
-  slab.position.y = 0.15; plaza.add(slab);
-  const basin = new THREE.Mesh(new THREE.CylinderGeometry(5, 5.6, 1.1, 20),
-    new THREE.MeshStandardMaterial({ color: 0x8a8290, roughness: 0.8 }));
-  basin.position.y = 0.7; plaza.add(basin);
-  const fwater = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 0.2, 20), MAT.water);
-  fwater.position.y = 1.25; plaza.add(fwater);
-  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2.4, 8), MAT.concrete);
-  jet.position.y = 2.2; plaza.add(jet);
-  addGlow(plaza, 0, 3.4, 0, 3, glowTexCyan);
+  for (const [r, y, m] of [[20, 0.06, MAT.pavingLight], [16, 0.10, MAT.pavingDark], [12, 0.14, MAT.pavingLight]]) {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.12, 32), m);
+    disc.position.y = y; plaza.add(disc);
+  }
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 7.0, 1.3, 24), MAT.stoneLight);
+  basin.position.y = 0.65; plaza.add(basin);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(6.5, 0.25, 8, 32), MAT.marble);
+  rim.rotation.x = Math.PI / 2; rim.position.y = 1.3; plaza.add(rim);
+  const fwater = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 6.2, 0.2, 24), MAT.water);
+  fwater.position.y = 1.15; plaza.add(fwater);
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 3.2, 12), MAT.marble);
+  pedestal.position.y = 2.75; plaza.add(pedestal);
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 1.8, 0.7, 16), MAT.stoneLight);
+  bowl.position.y = 4.5; plaza.add(bowl);
+  const bowlWater = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.15, 16), MAT.water);
+  bowlWater.position.y = 4.8; plaza.add(bowlWater);
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 2.6, 6), MAT.jetWater);
+  jet.position.y = 6.0; plaza.add(jet);
+  // Spray cone: small and faint now — the old big pale cone read as a
+  // lampshade floating over the bowl, not water.
+  const spray = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.0, 12), MAT.spray);
+  spray.rotation.x = Math.PI; spray.position.y = 7.5; plaza.add(spray);
+  // four angled side jets arcing out over the basin, with small splash puffs
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+    const dir = new THREE.Vector3(Math.sin(a) * 0.55, 0.84, Math.cos(a) * 0.55).normalize();
+    const sj = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 2.4, 6), MAT.jetWater);
+    sj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    sj.position.set(Math.sin(a) * 1.6, 4.6, Math.cos(a) * 1.6);
+    plaza.add(sj);
+    const splash = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), MAT.spray);
+    splash.position.set(Math.sin(a) * 2.3, 5.6, Math.cos(a) * 2.3);
+    plaza.add(splash);
+  }
+  // rim lights + a soft cyan glow over the water
+  const rimLightMat = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x22e6ff, emissiveIntensity: 1.5 });
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    const rl = new THREE.Mesh(new THREE.CircleGeometry(0.25, 10), rimLightMat);
+    rl.rotation.x = -Math.PI / 2;
+    rl.position.set(Math.cos(a) * 6.5, 1.32, Math.sin(a) * 6.5);
+    plaza.add(rl);
+  }
+  addGlow(plaza, 0, 1.6, 0, 7, glowTexCyan);
+  addGlow(plaza, 0, 7.8, 0, 4, glowTexCyan);
+  // hedge ring around the plaza edge
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+    const hg = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), MAT.hedge);
+    hg.position.set(Math.cos(a) * 18, 1.1, Math.sin(a) * 18);
+    plaza.add(hg);
+  }
   plaza.position.set(-90, 0, 30); scene.add(plaza);
 
   // ---- SAN AMARO sign (big, glowing, on a frame near the canal) ----
@@ -625,37 +953,50 @@ export function buildCity(scene) {
   }
   const palms = layout.trees.filter((t) => t.kind === 'palm');
   const palmTrunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.22, 4.6, 6), MAT.trunk, palms.length);
-  const palmFrond = new THREE.InstancedMesh(new THREE.PlaneGeometry(2.6, 0.7), MAT.frond, palms.length * 7);
+  // Fronds split across two tints (every 3rd palm is yellow-green) so the
+  // avenues are not one flat green.
+  const palmGroups = [[], []];
+  palms.forEach((t, i) => palmGroups[i % 3 === 0 ? 1 : 0].push(i));
+  const palmFronds = palmGroups.map((idxs, g) => new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(2.6, 0.7), g === 0 ? MAT.frond : MAT.frond2, idxs.length * 7));
   palms.forEach((t, i) => {
     const s = t.scale;
     setInstance(palmTrunk, i, t.x, 2.3 * s, t.z, 0, s, s, s);
+    const g = i % 3 === 0 ? 1 : 0;
+    const slot = palmGroups[g].indexOf(i);
     for (let j = 0; j < 7; j++) {
       // deterministic frond angle (no rand() here — the layout is the
       // seed, the mesh must be identical on every load)
       const a = (j / 7) * Math.PI * 2 + ((i * 0.37 + j * 0.13) % 0.4);
-      setInstance(palmFrond, i * 7 + j,
+      setInstance(palmFronds[g], slot * 7 + j,
         t.x + Math.cos(a) * 1.1 * s, 4.7 * s, t.z + Math.sin(a) * 1.1 * s,
         -a, s, s, s, 0.55, 0.25);
     }
   });
-  scene.add(palmTrunk); scene.add(palmFrond);
+  scene.add(palmTrunk);
+  palmFronds.forEach((m) => { scene.add(m); m.instanceMatrix.needsUpdate = true; });
   palmTrunk.instanceMatrix.needsUpdate = true;
-  palmFrond.instanceMatrix.needsUpdate = true;
   refs.palms.push(palms.length);
   const shades = layout.trees.filter((t) => t.kind === 'shade');
   const shadeTrunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.2, 2.2, 6), MAT.trunk, shades.length);
-  const shadeCanopy = new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 10, 8), MAT.canopy, shades.length);
-  const shadeCanopy2 = new THREE.InstancedMesh(new THREE.SphereGeometry(1.0, 8, 6), MAT.canopy2, shades.length);
+  // Canopies split across three tints (green / yellow-green / olive).
+  const shadeMats = [MAT.canopy, MAT.canopy2, MAT.canopy3];
+  const shadeGroups = [[], [], []];
+  shades.forEach((t, i) => shadeGroups[i % 3].push(i));
+  const shadeCanopies = shadeGroups.map((idxs, g) => new THREE.InstancedMesh(new THREE.SphereGeometry(1.5, 10, 8), shadeMats[g], idxs.length));
+  const shadeCanopies2 = shadeGroups.map((idxs, g) => new THREE.InstancedMesh(new THREE.SphereGeometry(1.0, 8, 6), shadeMats[g], idxs.length));
   shades.forEach((t, i) => {
     const s = t.scale;
+    const g = i % 3;
+    const slot = shadeGroups[g].indexOf(i);
     setInstance(shadeTrunk, i, t.x, 1.1 * s, t.z, 0, s, s, s);
-    setInstance(shadeCanopy, i, t.x, 3.1 * s, t.z, 0, s, s * 0.85, s);
-    setInstance(shadeCanopy2, i, t.x + 0.7 * s, 3.7 * s, t.z + 0.3 * s, 0, s, s, s);
+    setInstance(shadeCanopies[g], slot, t.x, 3.1 * s, t.z, 0, s, s * 0.85, s);
+    setInstance(shadeCanopies2[g], slot, t.x + 0.7 * s, 3.7 * s, t.z + 0.3 * s, 0, s, s, s);
   });
-  scene.add(shadeTrunk); scene.add(shadeCanopy); scene.add(shadeCanopy2);
+  scene.add(shadeTrunk);
+  shadeCanopies.forEach((m) => { scene.add(m); m.instanceMatrix.needsUpdate = true; });
+  shadeCanopies2.forEach((m) => { scene.add(m); m.instanceMatrix.needsUpdate = true; });
   shadeTrunk.instanceMatrix.needsUpdate = true;
-  shadeCanopy.instanceMatrix.needsUpdate = true;
-  shadeCanopy2.instanceMatrix.needsUpdate = true;
   // Lamps (instanced pole + arm + head + bulb; the arm points at the road
   // via each lamp's ry from the layout).
   const lampPole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.12, 5.2, 6), MAT.lampPole, layout.lamps.length);
@@ -687,6 +1028,17 @@ export function buildCity(scene) {
   // of them, and each is a few boxes).
   for (const b of layout.benches) makeBench(b.x, b.z, b.axis, scene);
   for (const b of layout.bins) makeBin(b.x, b.z, scene);
+  // Planters with shrubs beside every 3rd bench — small green accents in
+  // the planting strip, next to furniture that is already validated, so
+  // they can never block a path.
+  layout.benches.forEach((b, i) => {
+    if (i % 3 !== 0) return;
+    const px = b.axis === 'x' ? b.x + 2.0 : b.x;
+    const pz = b.axis === 'x' ? b.z : b.z + 2.0;
+    box(1.4, 1.1, 1.4, new THREE.MeshStandardMaterial({ color: 0x3d6b4a, roughness: 0.9 }), px, 0.55, pz, scene);
+    const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), MAT.canopy);
+    shrub.position.set(px, 1.4, pz); scene.add(shrub);
+  });
   // Benches + planters on the plaza edge (the old plaza-edge row, moved
   // to the new plaza at (-90, 30)).
   for (let i = 0; i < 8; i++) {
@@ -702,8 +1054,9 @@ export function buildCity(scene) {
     const r = 420 + rand() * 130;
     const h = 40 + rand() * 130;
     const w = 26 + rand() * 30;
+    const skyBase = pick(['#1c2438', '#2a3448', '#3a4048']);
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w),
-      new THREE.MeshStandardMaterial({ map: windowTexture('#1c2438', 0.22), roughness: 0.6, metalness: 0.3 }));
+      new THREE.MeshStandardMaterial({ map: windowTexture(skyBase, 0.22), roughness: 0.6, metalness: 0.3 }));
     b.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r);
     skyline.add(b);
   }

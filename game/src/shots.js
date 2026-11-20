@@ -6,7 +6,7 @@
 // Written from scratch from the re-author spec.
 const THREE = globalThis.THREE;
 import * as HUD from './hud.js';
-import { buildPerson, buildJay, buildNadia, buildRifle, aimPose } from './people.js';
+import { buildPerson, buildJay, buildNadia, buildRifle, aimPose, walkCycle } from './people.js';
 import { buildCar, setAirPitch } from './vehicles.js';
 
 const GOLDEN = { day: 'DAY 1 · 18:25', money: '$250', rank: 'NOBODY', xp: 0, xpMax: 200 };
@@ -202,14 +202,8 @@ function shotMission(G) {
     w.p.group.visible = true;
     w.fleeing = false; w.phase = i * 0.9;
   });
-  // a green neon ring on the Glass Spire (a landmark that reads at dusk).
-  // The Spire is on its own plot at (90,-90); the ring sits on its south
-  // face (z=-72), facing the boulevard.
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(5, 0.35, 8, 32),
-    new THREE.MeshStandardMaterial({ color: 0x2aff5a, emissive: 0x2aff5a, emissiveIntensity: 2.4 }));
-  ring.position.set(90, 52, -72);
-  scene.add(ring);
-  G.shotProps.push(ring);
+  // (The Spire's neon rings are permanent now — built into city.js — so
+  // this shot no longer adds its own.)
   // mission marker: a green neon ring flat on the road in the mid-distance
   const roadRing = new THREE.Mesh(new THREE.TorusGeometry(5, 0.22, 12, 48),
     new THREE.MeshStandardMaterial({ color: 0x2aff5a, emissive: 0x2aff5a, emissiveIntensity: 2.4 }));
@@ -357,33 +351,24 @@ function shotCineChase(G) {
 function shotCineSpire(G) {
   const { scene, camera } = G;
   const car = G.playerCar;
-  // On the x=120 street (a real street), facing north — the Spire is
-  // north-west at (90,-90). (The earlier take parked the car at (90,-30),
-  // mid-block inside a building, so the frame was a wall.)
-  // Camera 10 m behind the car, mirroring the main shot's geometry, so
-  // the Comet GT is big in the lower centre with the Spire beyond it.
-  car.group.position.set(120, 0, -6);
-  car.group.rotation.set(0, Math.PI, 0); // facing north (-Z), toward the Spire
-  car.group.visible = true;
-  setAirPitch(car, 0, 0);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(5, 0.35, 8, 32),
-    new THREE.MeshStandardMaterial({ color: 0x2aff5a, emissive: 0x2aff5a, emissiveIntensity: 2.4 }));
-  ring.position.set(90, 52, -72);
-  scene.add(ring);
-  G.shotProps.push(ring);
-  G.police[0].group.position.set(120, 0, -45);
-  G.police[0].group.rotation.set(0, Math.PI, 0);
-  G.police[0].group.visible = true;
-  G.police[1].group.visible = false;
-  G.police[2].group.visible = false;
-  // low and pulled back: the Comet GT is in the lower foreground, the
-  // Spire towers ahead with its neon ring. Camera 10 m behind the car
-  // (main-shot geometry) so the car is big, centre-frame, above the HUD.
-  camera.position.set(120, 2.0, 4);
-  camera.lookAt(100, 15, -90);
+  // (The Spire's neon rings are permanent now — built into city.js.)
+  // v2: the spire stands ALONE in its block (no neighbours within 35 m),
+  // so the right framing is from the west road looking up-north-east —
+  // the diagonal view from the east let a neighbouring tower occlude it,
+  // and the straight-up view from the south was too tight (no city
+  // context). Now the camera sits on the x=60 road: the spire is centre
+  // with its halo ring at ~30% height and the crown rising out of the
+  // top, the street and the downtown towers frame it on both sides. The
+  // car and cruiser are hidden here — in an upward-looking shot they
+  // would sit behind the bottom-centre dialogue panel; the shot is the
+  // spire and the skyline.
+  G.playerCar.group.visible = false;
+  G.police.forEach((u) => { u.group.visible = false; });
+  camera.position.set(60, 3, -30);
+  camera.lookAt(95, 25, -90);
   camera.fov = 55; camera.updateProjectionMatrix();
   newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'The Spire job starts here — but first, lose the tail.', 'COMET GT · SPORTS', 41);
-  G.minimapState = { player: { x: 120, z: -6, heading: Math.PI }, police: [{ x: 120, z: -45, color: '#ff2a1a' }], marker: { x: 90, z: -90 } };
+  G.minimapState = { player: { x: 60, z: -30, heading: Math.PI }, police: [], marker: { x: 90, z: -90 } };
 }
 
 // ---- Shot 7: cinematic candidate — Sunset Plaza ----
@@ -403,10 +388,12 @@ function shotCinePlaza(G) {
   G.police[0].group.visible = false;
   G.police[1].group.visible = false;
   G.police[2].group.visible = false;
-  // raised and pulled back: the Comet GT + Jay in the foreground, the
-  // fountain and the plaza ring behind them
-  camera.position.set(-102, 3.2, 18);
-  camera.lookAt(-86, 2, 30);
+  // v2: the old camera (from the south-east, looking north-east) put the
+  // car and Jay ~70 degrees off-axis — out of frame entirely. Now the
+  // camera sits south of the plaza looking north-east, so the car + Jay
+  // are in the right foreground and the fountain is centre-frame.
+  camera.position.set(-108, 3.5, -2);
+  camera.lookAt(-88, 3, 24);
   camera.fov = 55; camera.updateProjectionMatrix();
   newShotHUD(G, 'FIRST WHEELS', 'Meet Nadia', 'The plaza at golden hour — the city is yours to take.', 'COMET GT · SPORTS', 0);
   G.minimapState = { player: { x: -90, z: 8, heading: Math.PI * 0.75 }, police: [], marker: { x: -90, z: 30 } };
@@ -465,10 +452,11 @@ function shotCineBridge(G) {
   G.police[0].group.visible = true;
   G.police[1].group.visible = false;
   G.police[2].group.visible = false;
-  // lookAt y=8 (not 12): a shallower up-angle keeps the Comet GT above
-  // the bottom-centre HUD while the LIFT BRIDGE sign stays in frame.
-  camera.position.set(-6, 2.5, -230);
-  camera.lookAt(0, 8, -282);
+  // v2: pulled back and looking right of the sign, so the LIFT BRIDGE sign
+  // sits in the left third — clear of the top-centre HUD block that used
+  // to clip it — while the Comet GT stays big in the lower foreground.
+  camera.position.set(-7, 3, -215);
+  camera.lookAt(12, 6, -282);
   camera.fov = 55; camera.updateProjectionMatrix();
   newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'The bridge is the only way out — and it is up.', 'COMET GT · SPORTS', 63);
   G.minimapState = { player: { x: 0, z: -245, heading: Math.PI }, police: [{ x: -8, z: -258, color: '#ff2a1a' }], marker: { x: 0, z: -300 } };
@@ -616,7 +604,345 @@ function shotReviewDriving(G) {
   G.minimapState = { player: { x: 0, z: 0, heading: Math.PI / 2 }, police: [{ x: 34, z: 2.5, color: '#ff2a1a' }], marker: { x: 120, z: 0 } };
 }
 
-export const SHOTS = { 1: shotChase, 2: shotShootout, 3: shotMission, 4: shotJump, 5: shotCineChase, 6: shotCineSpire, 7: shotCinePlaza, 8: shotCineNeon, 9: shotCineBridge, 10: shotReviewAerial, 11: shotReviewDowntown, 12: shotReviewCommercial, 13: shotReviewResidential, 14: shotReviewIntersection, 15: shotReviewStreet, 16: shotReviewDriving };
+// ---- Shot 17: MAIN CANDIDATE — key art, Jay + Comet GT, Neon Row ----
+// Very low camera on Palm Row at blue hour: Jay stands in the street in
+// the foreground facing the camera, the Comet GT behind him, a cruiser
+// closing in, neon shopfronts on both sides. The AAA key-art composition:
+// character + car + chase + city, with real depth.
+// v2: traffic is HIDDEN for this shot — a random traffic pickup drove
+// straight through the frame in the first take and blocked Jay. The
+// composition is fully staged here (Jay + car + one cruiser), and Jay
+// and the car are repositioned so Jay is big in the left foreground,
+// the car centre, the cruiser right.
+function shotKeyArtJay(G) {
+  const { scene, camera } = G;
+  // Traffic AND parked cars are hidden for this shot: a random traffic
+  // pickup drove through the frame in the first take, and a parked car
+  // in the bay at (-10, 55.2) sat right between the camera and Jay and
+  // hid him completely in the second take. The composition is fully
+  // staged here (Jay + car + one cruiser).
+  G.traffic.cars.forEach((c) => { c.group.visible = false; });
+  G.parked.forEach((g) => { g.visible = false; });
+  const car = G.playerCar;
+  car.group.position.set(4, 0, 59);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  const jay = G.jay;
+  // Jay stands on the road just west of the car, facing the camera —
+  // the old spot (-5, 57) was behind the parked car in bay (-10, 55.2).
+  jay.group.position.set(0, 0, 56.5);
+  jay.group.rotation.set(0, -1.94, 0); // facing the camera (south-west)
+  jay.group.visible = true;
+  G.police[0].group.position.set(22, 0, 63);
+  G.police[0].group.rotation.set(0, -Math.PI / 2, 0);
+  G.police[0].group.visible = true;
+  G.police[1].group.visible = false;
+  G.police[2].group.visible = false;
+  camera.position.set(-11, 1.5, 52);
+  camera.lookAt(14, 2, 60);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'Neon Row at blue hour — Jay, the Comet GT, and the SAMPD closing in.', 'COMET GT · SPORTS', 0);
+  G.minimapState = { player: { x: 4, z: 59, heading: Math.PI / 2 }, police: [{ x: 22, z: 63, color: '#ff2a1a' }], marker: { x: 120, z: 60 } };
+}
+
+// ---- Shot 18: MAIN CANDIDATE — night chase, Lantern Blvd ----
+// The chase composition at night: headlights on, lamp bulbs glowing, wet
+// road, the cruisers' light bars flashing. Same staging as shot 5, camera
+// lower (1.4 m) for a stronger low-angle read.
+function shotNightChase(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(0, 0, 0);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  G.police[0].group.position.set(18, 0, 2.5);
+  G.police[0].group.rotation.set(0, -Math.PI / 2, 0);
+  G.police[0].group.visible = true;
+  G.police[1].group.position.set(28, 0, -3.5);
+  G.police[1].group.rotation.set(0, -Math.PI / 2, 0);
+  G.police[1].group.visible = true;
+  const heli = G.police[2];
+  heli.group.position.set(16, 12, -8);
+  heli.group.rotation.set(0, 0.6, 0);
+  heli.group.visible = true;
+  const flee = [[-4, 9.5, 1], [8, -9.5, -1], [14, 9.5, 1], [-12, -9.5, -1]];
+  G.stagedPeds.forEach((w, i) => {
+    const f = flee[i % flee.length];
+    w.p.group.position.set(f[0], 0, f[1]);
+    w.p.group.rotation.y = f[2] > 0 ? Math.PI / 2 : -Math.PI / 2;
+    w.p.group.visible = true;
+    w.fleeing = true; w.phase = i * 1.3;
+  });
+  camera.position.set(-12, 1.4, -3.0);
+  camera.lookAt(16, 1.5, 0);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'Lantern Blvd at night — headlights on, the SAMPD closing in.', 'COMET GT · SPORTS', 58);
+  G.minimapState = { player: { x: 0, z: 0, heading: Math.PI / 2 }, police: [{ x: 18, z: 2.5, color: '#ff2a1a' }, { x: 28, z: -3.5, color: '#ff2a1a' }], marker: { x: 120, z: 0 } };
+}
+
+// ---- Shot 19: MAIN CANDIDATE — bridge approach + SAN AMARO sign ----
+// Low camera south-east of the bridge approach, looking north-west: the
+// Comet GT on the approach road in the centre, the lift towers beyond it,
+// and the big SAN AMARO sign on the left — bridge + city identity in one
+// frame, at golden hour.
+function shotBridgeSign(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(0, 0, -245);
+  car.group.rotation.set(0, Math.PI, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  G.police[0].group.position.set(-8, 0, -258);
+  G.police[0].group.rotation.set(0, Math.PI, 0);
+  G.police[0].group.visible = true;
+  G.police[1].group.visible = false;
+  G.police[2].group.visible = false;
+  // v2: the old camera sat INSIDE a block (x=18 is not a road) next to a
+  // building that filled half the frame black, and the car was hidden.
+  // Now the camera is ON the approach road (x=6) looking north-west, so
+  // the car is right-centre, the towers centre-left, and the SAN AMARO
+  // sign on the far left — bridge + city identity in one frame.
+  camera.position.set(6, 3, -212);
+  camera.lookAt(-20, 8, -270);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'The bridge is the only way out — and it is up.', 'COMET GT · SPORTS', 63);
+  G.minimapState = { player: { x: 0, z: -245, heading: Math.PI }, police: [{ x: -8, z: -258, color: '#ff2a1a' }], marker: { x: 0, z: -300 } };
+}
+
+// ---- Shot 20: MAIN CANDIDATE — plaza at midday, Jay + car + fountain ----
+// The rebuilt fountain as the centrepiece: Jay and the Comet GT in the
+// foreground, the two-tier fountain with its jets behind them, palms and
+// varied facades ringing the square, blue sky. Day mood.
+function shotPlazaDay(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(-90, 0, 8);
+  car.group.rotation.set(0, Math.PI * 0.75, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  const jay = G.jay;
+  jay.group.position.set(-84, 0, 14);
+  jay.group.rotation.set(0, -Math.PI * 0.25, 0);
+  jay.group.visible = true;
+  G.police[0].group.visible = false;
+  G.police[1].group.visible = false;
+  G.police[2].group.visible = false;
+  // v2: same fix as shot 7 — the old camera put the car and Jay out of
+  // frame. Now they are in the right foreground with the fountain centre.
+  camera.position.set(-108, 3.5, -2);
+  camera.lookAt(-88, 3, 24);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Meet Nadia', 'The plaza at midday — the fountain, the palms, the whole city.', 'COMET GT · SPORTS', 0);
+  G.minimapState = { player: { x: -90, z: 8, heading: Math.PI * 0.75 }, police: [], marker: { x: -90, z: 30 } };
+}
+
+// ---- Shot 21: MAIN CANDIDATE — downtown canyon at midday ----
+// Very low, slightly wide: the Comet GT threading the downtown canyon,
+// varied glass + concrete towers on both sides, traffic ahead, a cruiser
+// trailing, the street running long into the skyline. Day mood.
+function shotDowntownCanyon(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(-10, 0, 0);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  G.midTraffic.forEach((c, i) => {
+    const x = 20 + i * 18;
+    const z = (i % 2 === 0 ? 3 : -3);
+    c.group.position.set(x, 0, z);
+    c.group.rotation.set(0, Math.PI / 2, 0);
+    c.group.visible = true;
+  });
+  G.police[0].group.position.set(-24, 0, 4);
+  G.police[0].group.rotation.set(0, Math.PI / 2, 0);
+  G.police[0].group.visible = true;
+  G.police[1].group.visible = false;
+  G.police[2].group.visible = false;
+  // v2: the old camera sat 20 m behind the car, so the player car was
+  // BEHIND the camera and invisible — the red car in frame was traffic.
+  // Now the camera is 10 m behind the Comet GT: the car is big in the
+  // lower centre with the canyon running ahead.
+  camera.position.set(-20, 1.8, -4);
+  camera.lookAt(60, 10, 0);
+  camera.fov = 58; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'Downtown canyon — the towers close in, the SAMPD closes faster.', 'COMET GT · SPORTS', 52);
+  G.minimapState = { player: { x: -10, z: 0, heading: Math.PI / 2 }, police: [{ x: -24, z: 4, color: '#ff2a1a' }], marker: { x: 120, z: 0 } };
+}
+
+// ---- Shot 22: PROOF — on-foot gameplay ----
+// Jay walking east on the Lantern Blvd sidewalk, frozen mid-stride, with
+// pedestrians walking both sidewalks around him and the downtown canyon
+// behind. Day mood. (Reference: GTA-style third-person on-foot shot —
+// character + NPCs + city, camera behind the character.)
+function shotProofOnFoot(G) {
+  const { scene, camera } = G;
+  const jay = G.jay;
+  jay.group.position.set(0, 0, -9.5);
+  jay.group.rotation.set(0, Math.PI / 2, 0); // facing east, walking away
+  jay.group.visible = true;
+  walkCycle(jay, 1.2, 4, false); // freeze mid-stride
+  const peds = [
+    [-8, -9.5, 1], [7, -9.5, -1], [14, 9.5, 1], [-14, 9.5, -1], [22, -9.5, 1], [-22, 9.5, -1],
+  ];
+  G.stagedPeds.forEach((w, i) => {
+    const f = peds[i % peds.length];
+    w.p.group.position.set(f[0], 0, f[1]);
+    w.p.group.rotation.y = f[2] > 0 ? Math.PI / 2 : -Math.PI / 2;
+    w.p.group.visible = true;
+    w.fleeing = false; w.phase = i * 1.1;
+  });
+  G.midPeds.forEach((w, i) => {
+    const x = -18 + i * 8;
+    const z = (i % 2 === 0 ? 9.5 : -9.5);
+    w.p.group.position.set(x, 0, z);
+    w.p.group.rotation.y = (i % 2 === 0 ? -Math.PI / 2 : Math.PI / 2);
+    w.p.group.visible = true;
+    w.fleeing = false; w.phase = i * 0.9;
+  });
+  G.police.forEach((u) => { u.group.visible = false; });
+  G.playerCar.group.visible = false;
+  // a parked taxi at the curb ahead, for street life
+  const { group: taxiG } = buildCar('taxi');
+  taxiG.position.set(18, 0, 4.8);
+  taxiG.rotation.set(0, Math.PI / 2, 0);
+  taxiG.visible = true;
+  scene.add(taxiG);
+  G.shotProps.push(taxiG);
+  // camera behind and to the side of Jay — he walks away down the street
+  camera.position.set(-8, 2.2, -12);
+  camera.lookAt(10, 1.2, -9);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  baseHUD();
+  HUD.hideVehicle();
+  HUD.setMission({
+    chapter: 'CHAPTER 1 · MISSION 1', title: 'FIRST WHEELS',
+    objective: 'Explore San Amaro',
+    desc: 'On foot in Downtown Core — the city is alive.',
+    fill: 0.33, stage: 'Stage 1 / 3', par: '+$100', time: '00:01 / 02:41',
+  });
+  HUD.setWanted(0, 'CLEAR', 'clear', '$250', 'NOBODY', 0, 200);
+  HUD.setPolice([
+    { dist: '—', status: 'STANDBY' },
+    { dist: '—', status: 'STANDBY' },
+    { dist: '—', status: 'STANDBY' },
+  ]);
+  HUD.setDialogue('NADIA · PALM & PISTON',
+    '“The city never sleeps, Jay. Neither do we.”', 'nadia', '#8a5a3a', '#1c1410');
+  HUD.setWeapon(0);
+  G.minimapState = { player: { x: 0, z: -9.5, heading: Math.PI / 2 }, police: [], marker: null };
+}
+
+// ---- Shot 23: PROOF — driving gameplay ----
+// The Comet GT driving east on Lantern Blvd, dense traffic ahead (sedans,
+// a taxi, a pickup), the downtown skyline ahead, palms and shopfronts on
+// both sides. Day mood. (Reference: GTA-style chase-cam driving shot —
+// car + road + traffic + city.)
+function shotProofDriving(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(0, 0, 0);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  G.midTraffic.forEach((c, i) => {
+    const x = 16 + i * 15;
+    const z = (i % 2 === 0 ? 3 : -3);
+    c.group.position.set(x, 0, z);
+    c.group.rotation.set(0, Math.PI / 2, 0);
+    c.group.visible = true;
+  });
+  const { group: taxiG } = buildCar('taxi');
+  taxiG.position.set(54, 0, 3);
+  taxiG.rotation.set(0, Math.PI / 2, 0);
+  taxiG.visible = true;
+  scene.add(taxiG);
+  G.shotProps.push(taxiG);
+  const { group: pkG } = buildCar('pickup');
+  pkG.position.set(70, 0, -3);
+  pkG.rotation.set(0, Math.PI / 2, 0);
+  pkG.visible = true;
+  scene.add(pkG);
+  G.shotProps.push(pkG);
+  G.police.forEach((u) => { u.group.visible = false; });
+  camera.position.set(-8, 2.6, -3.0);
+  camera.lookAt(24, 1.5, 0);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  newShotHUD(G, 'FIRST WHEELS', 'Drive to the marker', 'Lantern Blvd — traffic, palms, the downtown skyline.', 'COMET GT · SPORTS', 58);
+  // v2: a plain driving shot — no wanted level (the template HUD sets 2
+  // stars, which belongs to a pursuit, not a drive).
+  HUD.setWanted(0, 'CLEAR', 'clear', '$250', 'NOBODY', 0, 200);
+  HUD.setPolice([
+    { dist: '—', status: 'STANDBY' },
+    { dist: '—', status: 'STANDBY' },
+    { dist: '—', status: 'STANDBY' },
+  ]);
+  G.minimapState = { player: { x: 0, z: 0, heading: Math.PI / 2 }, police: [], marker: { x: 120, z: 0 } };
+}
+
+// ---- Shot 24: PROOF (staged backup) — police pursuit ----
+// The Comet GT fleeing east with TWO cruisers right on its tail (4 m and
+// 9 m back, closing in — not parked ahead) and AIR-1 overhead: the pursuit
+// actually happening, two wanted stars on the HUD. This is the staged
+// backup for the live play-mode pursuit capture (proof-pursuit), which
+// triggers a real wanted level in the running game.
+// (Reference: GTA-style pursuit shot — wanted stars, cruisers, chase.)
+function shotProofPursuit(G) {
+  const { scene, camera } = G;
+  const car = G.playerCar;
+  car.group.position.set(0, 0, 0);
+  car.group.rotation.set(0, Math.PI / 2, 0);
+  car.group.visible = true;
+  setAirPitch(car, 0, 0);
+  G.police[0].group.position.set(-5, 0, -2.5);
+  G.police[0].group.rotation.set(0, Math.PI / 2, 0);
+  G.police[0].group.visible = true;
+  G.police[1].group.position.set(-11, 0, -3.5);
+  G.police[1].group.rotation.set(0, Math.PI / 2, 0);
+  G.police[1].group.visible = true;
+  const heli = G.police[2];
+  heli.group.position.set(10, 12, -6);
+  heli.group.rotation.set(0, 0.6, 0);
+  heli.group.visible = true;
+  const flee = [[-4, 9.5, 1], [6, -9.5, -1], [12, 9.5, 1], [-10, -9.5, -1]];
+  G.stagedPeds.forEach((w, i) => {
+    const f = flee[i % flee.length];
+    w.p.group.position.set(f[0], 0, f[1]);
+    w.p.group.rotation.y = f[2] > 0 ? Math.PI / 2 : -Math.PI / 2;
+    w.p.group.visible = true;
+    w.fleeing = true; w.phase = i * 1.3;
+  });
+  // v2: pulled further back and higher, looking north-east — the old
+  // camera put both cruisers outside the frame (one left of the fov, one
+  // behind the camera) and the heli above the top edge. Now the car is
+  // centre, both cruisers are visible on its tail (left), and AIR-1 is
+  // in the top of the frame.
+  camera.position.set(-16, 3, -7);
+  camera.lookAt(12, 1.5, 0);
+  camera.fov = 55; camera.updateProjectionMatrix();
+  baseHUD();
+  HUD.setMission({
+    chapter: 'CHAPTER 1 · MISSION 1', title: 'FIRST WHEELS',
+    objective: 'Lose the police',
+    desc: 'Two cruisers on you — lose them, then get to the marker.',
+    fill: 1, stage: 'Stage 3 / 3', par: '+$100', time: '00:01 / 02:41',
+  });
+  HUD.setWanted(2, 'IN PURSUIT · 2 UNITS', '', '$250', 'NOBODY', 0, 200);
+  HUD.setPolice([
+    { dist: '4 m', status: 'PURSUIT' },
+    { dist: '9 m', status: 'PURSUIT' },
+    { dist: '—', status: 'AIR-1' },
+  ]);
+  HUD.setVehicle({ name: 'COMET GT · SPORTS', speed: 71, condition: 96, nitro: 100 });
+  HUD.setDialogue('NADIA · PALM & PISTON',
+    '“BAY-12 is right on you — lose them before the bridge, or you’re done.”', 'nadia', '#8a5a3a', '#1c1410');
+  HUD.setWeapon(0);
+  G.minimapState = { player: { x: 0, z: 0, heading: Math.PI / 2 }, police: [{ x: -5, z: 2.5, color: '#ff2a1a' }, { x: -11, z: -3.5, color: '#ff2a1a' }], marker: { x: 120, z: 0 } };
+}
+
+export const SHOTS = { 1: shotChase, 2: shotShootout, 3: shotMission, 4: shotJump, 5: shotCineChase, 6: shotCineSpire, 7: shotCinePlaza, 8: shotCineNeon, 9: shotCineBridge, 10: shotReviewAerial, 11: shotReviewDowntown, 12: shotReviewCommercial, 13: shotReviewResidential, 14: shotReviewIntersection, 15: shotReviewStreet, 16: shotReviewDriving, 17: shotKeyArtJay, 18: shotNightChase, 19: shotBridgeSign, 20: shotPlazaDay, 21: shotDowntownCanyon, 22: shotProofOnFoot, 23: shotProofDriving, 24: shotProofPursuit };
 export function setupShot(n, G) {
   // clear per-shot props from the previous shot
   for (const p of G.shotProps) G.scene.remove(p);

@@ -15,45 +15,101 @@ import { setupShot } from './shots.js';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const params = new URLSearchParams(location.search);
-const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, 16) : 0;
+const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, 24) : 0;
 window.__shotReady = false;
 window.__shot = SHOT;
+
+// ---------- lighting moods ----------
+// The old look was ONE mood: a hard golden hour whose pink sun, pink fog,
+// pink hemisphere and orange CSS grade washed the whole city red — the #1
+// visual complaint (every screenshot read as one red wall, details
+// drowned). Now four moods, chosen with ?mood=day|golden|bluehour|night
+// (default golden, tamed). Each mood sets the sky shader, fog, sun,
+// hemisphere, ambient, environment cube and the DOM grade overlay
+// (index.html reads documentElement.dataset.mood).
+const MOODS = {
+  day: {
+    sunDir: [0.35, 0.72, 0.45], skyTop: [0.20, 0.42, 0.78], skyMid: [0.55, 0.70, 0.92], skyHor: [0.88, 0.90, 0.96], skyBelow: [0.35, 0.38, 0.42],
+    sunTint: [1.0, 0.95, 0.80], sunCore: [1.0, 0.98, 0.90],
+    sunColor: 0xfff2d8, sunIntensity: 2.3, hemiSky: 0xbfd8ff, hemiGround: 0x707a68, hemiIntensity: 0.95,
+    ambColor: 0xdfe8ff, ambIntensity: 0.45, fog: 0x9ab8d4, exposure: 1.0,
+    envSide: ['#5a7ab0', '#a0c0e8', '#7a9ac8'], envTop: ['#3a5a9a', '#5a7ab0', '#7a9ac8'], envBot: ['#3a3a42', '#4a4a52', '#5a5248'],
+    spriteColor: 0xfff6d8, spriteOpacity: 0.5, spriteScale: 140,
+    dayLabel: 'DAY 1 · 11:40', moodLabel: 'MIDDAY',
+  },
+  golden: {
+    sunDir: [-0.78, 0.20, 0.42], skyTop: [0.14, 0.10, 0.30], skyMid: [0.85, 0.45, 0.52], skyHor: [0.98, 0.52, 0.40], skyBelow: [0.16, 0.10, 0.20],
+    sunTint: [1.0, 0.50, 0.36], sunCore: [1.0, 0.75, 0.55],
+    sunColor: 0xffb080, sunIntensity: 1.9, hemiSky: 0xffb090, hemiGround: 0x2a2438, hemiIntensity: 0.85,
+    ambColor: 0xff8a7a, ambIntensity: 0.30, fog: 0xc98a8e, exposure: 1.05,
+    envSide: ['#4a3a6a', '#e86a8a', '#d86a7a'], envTop: ['#2a1a4a', '#3a2a5a', '#5a3a6a'], envBot: ['#1a1218', '#241a20', '#2a1a16'],
+    spriteColor: 0xffe0a0, spriteOpacity: 0.7, spriteScale: 180,
+    dayLabel: 'DAY 1 · 18:25', moodLabel: 'GOLDEN HOUR',
+  },
+  bluehour: {
+    sunDir: [-0.75, 0.08, 0.45], skyTop: [0.05, 0.08, 0.25], skyMid: [0.28, 0.22, 0.52], skyHor: [0.72, 0.38, 0.52], skyBelow: [0.08, 0.07, 0.16],
+    sunTint: [1.0, 0.45, 0.35], sunCore: [1.0, 0.65, 0.45],
+    sunColor: 0xff8a50, sunIntensity: 1.1, hemiSky: 0x5a6ab0, hemiGround: 0x1a1a28, hemiIntensity: 0.7,
+    ambColor: 0x4a5a8a, ambIntensity: 0.35, fog: 0x50506e, exposure: 1.0,
+    envSide: ['#2a2a55', '#4a3a6a', '#5a4a7a'], envTop: ['#1a1a3a', '#2a2a55', '#3a3a6a'], envBot: ['#0e0e18', '#141420', '#1a1620'],
+    spriteColor: 0xffb080, spriteOpacity: 0.6, spriteScale: 160,
+    dayLabel: 'DAY 1 · 19:40', moodLabel: 'BLUE HOUR',
+  },
+  night: {
+    sunDir: [0.3, 0.55, -0.4], skyTop: [0.01, 0.02, 0.08], skyMid: [0.05, 0.07, 0.18], skyHor: [0.14, 0.11, 0.24], skyBelow: [0.03, 0.03, 0.07],
+    sunTint: [0.6, 0.7, 1.0], sunCore: [0.8, 0.85, 1.0],
+    sunColor: 0x9ab0ff, sunIntensity: 0.55, hemiSky: 0x2a3a6a, hemiGround: 0x0a0a12, hemiIntensity: 0.65,
+    ambColor: 0x1a2038, ambIntensity: 0.4, fog: 0x14142a, exposure: 1.0,
+    envSide: ['#14142a', '#1e1e3a', '#2a2a4a'], envTop: ['#0a0a1a', '#14142a', '#1e1e3a'], envBot: ['#08080f', '#0c0c14', '#101018'],
+    spriteColor: 0xc8d8ff, spriteOpacity: 0.5, spriteScale: 90,
+    dayLabel: 'DAY 1 · 22:15', moodLabel: 'NIGHT',
+  },
+};
+const MOOD = ['day', 'golden', 'bluehour', 'night'].includes(params.get('mood') || '') ? params.get('mood') : 'golden';
+const MOODDEF = MOODS[MOOD];
 
 // ---------- renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = MOODDEF.exposure;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xd9788a, 90, 780);
+scene.fog = new THREE.Fog(MOODDEF.fog, 90, 780);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 4, -12);
 
 // ---------- sunset sky (gradient dome + sun glow) + environment ----------
-const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
+const SUN_DIR = new THREE.Vector3(...MOODDEF.sunDir).normalize();
 {
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sunDir: { value: SUN_DIR } },
+    uniforms: {
+      sunDir: { value: SUN_DIR },
+      skyTop: { value: new THREE.Vector3(...MOODDEF.skyTop) },
+      skyMid: { value: new THREE.Vector3(...MOODDEF.skyMid) },
+      skyHor: { value: new THREE.Vector3(...MOODDEF.skyHor) },
+      skyBelow: { value: new THREE.Vector3(...MOODDEF.skyBelow) },
+      sunTint: { value: new THREE.Vector3(...MOODDEF.sunTint) },
+      sunCore: { value: new THREE.Vector3(...MOODDEF.sunCore) },
+    },
     vertexShader: `varying vec3 vDir;
       void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
     fragmentShader: `varying vec3 vDir; uniform vec3 sunDir;
+      uniform vec3 skyTop; uniform vec3 skyMid; uniform vec3 skyHor; uniform vec3 skyBelow;
+      uniform vec3 sunTint; uniform vec3 sunCore;
       void main(){
         vec3 d = normalize(vDir);
         float h = d.y;
-        vec3 top = vec3(0.11, 0.07, 0.26);
-        vec3 mid = vec3(0.96, 0.36, 0.52);
-        vec3 hor = vec3(1.0, 0.38, 0.34);
-        vec3 col = mix(hor, mid, smoothstep(0.02, 0.28, h));
-        col = mix(col, top, smoothstep(0.22, 0.68, h));
-        col = mix(vec3(0.16,0.10,0.20), col, smoothstep(-0.08, 0.02, h));
+        vec3 col = mix(skyHor, skyMid, smoothstep(0.02, 0.28, h));
+        col = mix(col, skyTop, smoothstep(0.22, 0.68, h));
+        col = mix(skyBelow, col, smoothstep(-0.08, 0.02, h));
         float s = max(dot(d, sunDir), 0.0);
-        col += vec3(1.0, 0.42, 0.34) * pow(s, 18.0) * 0.45;
-        col += vec3(1.0, 0.72, 0.52) * pow(s, 220.0) * 1.3;
+        col += sunTint * pow(s, 18.0) * 0.45;
+        col += sunCore * pow(s, 220.0) * 1.3;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -68,9 +124,9 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
   grad.addColorStop(1, 'rgba(255,80,80,0)');
   gg.fillStyle = grad; gg.fillRect(0, 0, 128, 128);
   const sunTex = new THREE.CanvasTexture(gc);
-  const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 }));
+  const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: MOODDEF.spriteOpacity, color: MOODDEF.spriteColor }));
   sunSprite.position.copy(SUN_DIR).multiplyScalar(820);
-  sunSprite.scale.set(180, 180, 1);
+  sunSprite.scale.set(MOODDEF.spriteScale, MOODDEF.spriteScale, 1);
   scene.add(sunSprite);
 }
 // environment (warm gradient cube) so water + car paint reflect the sunset
@@ -84,9 +140,9 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
     g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
     return c;
   };
-  const side = mk('#3a2a5a', '#ff5a9a', '#e85a7a');
-  const topF = mk('#2a1a4a', '#3a2a5a', '#5a3a6a');
-  const botF = mk('#1a1218', '#241a20', '#2a1a16');
+  const side = mk(...MOODDEF.envSide);
+  const topF = mk(...MOODDEF.envTop);
+  const botF = mk(...MOODDEF.envBot);
   faces.push(side, side, topF, botF, side, side);
   const cube = new THREE.CubeTexture(faces);
   cube.needsUpdate = true;
@@ -94,11 +150,22 @@ const SUN_DIR = new THREE.Vector3(-0.78, 0.20, 0.42).normalize();
 }
 
 // ---------- lights ----------
-const sun = new THREE.DirectionalLight(0xff9a70, 1.9);
+const sun = new THREE.DirectionalLight(MOODDEF.sunColor, MOODDEF.sunIntensity);
 sun.position.copy(SUN_DIR).multiplyScalar(320);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xff7a9a, 0x2a2438, 0.85));
-scene.add(new THREE.AmbientLight(0xff7a8a, 0.35));
+scene.add(new THREE.HemisphereLight(MOODDEF.hemiSky, MOODDEF.hemiGround, MOODDEF.hemiIntensity));
+scene.add(new THREE.AmbientLight(MOODDEF.ambColor, MOODDEF.ambIntensity));
+
+// HUD time-of-day label + DOM mood class (drives the CSS grade overlay in
+// index.html) + the mood handle the capture harness reads.
+document.documentElement.dataset.mood = MOOD;
+window.__mood = MOOD;
+{
+  const dayLine = document.getElementById('day-line');
+  const goldenLine = document.getElementById('golden-line');
+  if (dayLine) dayLine.textContent = MOODDEF.dayLabel;
+  if (goldenLine) goldenLine.textContent = MOODDEF.moodLabel;
+}
 
 // ---------- bloom (real, via the vendored bundle) — falls back to direct render ----------
 let composer = null;
