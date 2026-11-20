@@ -197,6 +197,58 @@
     text-shadow:0 4px 30px rgba(255,42,26,.6)}
   #toast .sub{font-size:16px;font-weight:700;color:var(--text);margin-top:6px}
   #hud.hidden{display:none}
+  /* Overlays (pause menu, controls, settings, confirm) */
+  .overlay{position:fixed;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;
+    background:rgba(8,10,20,.72);backdrop-filter:blur(3px)}
+  .overlay.hidden{display:none}
+  .overlay-card{width:min(680px,92vw);max-height:88vh;overflow:auto;padding:22px 26px}
+  .overlay-card h2{font-size:28px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;
+    background:linear-gradient(90deg,#ffd23e,#ff2e88 55%,#22e6ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .overlay-card .sub{color:var(--muted);font-size:13px;font-weight:700;margin-top:4px}
+  .overlay-card button{pointer-events:auto;background:rgba(16,18,26,.9);
+    border:1px solid var(--panel-border);border-left:4px solid var(--pink);
+    color:var(--text);font:900 15px/1 system-ui,sans-serif;letter-spacing:.08em;
+    padding:12px 18px;border-radius:8px;cursor:pointer;text-transform:uppercase}
+  .overlay-card button:hover{border-left-color:var(--gold);background:rgba(40,26,48,.95)}
+  .overlay-card button.primary{border-left-color:var(--gold)}
+  .ctrl-table{width:100%;margin:14px 0;border-collapse:collapse;font-size:14px}
+  .ctrl-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .ctrl-table td:first-child{font-weight:900;letter-spacing:.06em;color:var(--gold);white-space:nowrap;width:180px}
+  /* Pause menu */
+  #pause-menu .pause-inner{width:min(1060px,94vw);max-height:92vh;overflow:auto;padding:20px 22px}
+  #pause-menu h2{font-size:34px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;
+    background:linear-gradient(90deg,#ffd23e,#ff2e88 55%,#22e6ff);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  #pause-menu .sub{color:var(--muted);font-size:12px;font-weight:700;margin-top:2px}
+  .pause-cols{display:flex;gap:14px;margin-top:14px}
+  .pause-map{flex:1.25;min-width:0}
+  .pause-profile{flex:1;min-width:0}
+  #pause-map{width:100%;height:auto;border-radius:10px;display:block;background:#0a0d18;margin-top:8px}
+  .map-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;font-weight:700;color:var(--muted)}
+  .map-legend b{font-size:14px}
+  .pause-btns{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .pause-btns button{pointer-events:auto;background:rgba(16,18,26,.9);
+    border:1px solid var(--panel-border);border-left:4px solid var(--pink);
+    color:var(--text);font:900 15px/1 system-ui,sans-serif;letter-spacing:.08em;
+    padding:12px 18px;border-radius:8px;cursor:pointer;text-transform:uppercase}
+  .pause-btns button:hover{border-left-color:var(--gold);background:rgba(40,26,48,.95)}
+  .pause-btns button.primary{border-left-color:var(--gold)}
+  .prof-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;
+    border-bottom:1px solid rgba(255,255,255,.08);font-size:14px}
+  .prof-row span:first-child{color:var(--muted);font-weight:700}
+  .prof-row b{color:var(--gold);text-align:right}
+  .prof-row .crew-list{text-align:right;line-height:1.5}
+  /* Settings rows */
+  .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .set-row .lbl{font-weight:900;letter-spacing:.08em;font-size:14px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{padding:9px 13px;font-size:13px}
+  .seg button.on{border-left-color:var(--gold);background:rgba(255,210,62,.18);color:var(--gold)}
+  /* Save-slot selection on the start screen */
+  #start .slots .slot-save{cursor:pointer}
+  #start .slots .slot-save.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
 </style>
 </head>
 <body>
@@ -234,12 +286,16 @@
 
   <div id="police" class="panel">
     <h3>SAMPD RESPONSE</h3>
-    <div class="cop"><span>BAY-12</span><span class="dist" id="cop0-dist">7 m</span>
-      <span class="badge pursuit" id="cop0-badge">PURSUIT</span></div>
-    <div class="cop"><span>VICTOR-7</span><span class="dist" id="cop1-dist">13 m</span>
-      <span class="badge enroute" id="cop1-badge">EN ROUTE</span></div>
-    <div class="cop"><span>AIR-1</span><span class="dist" id="cop2-dist">—</span>
+    <div class="cop"><span>BAY-12</span><span class="dist" id="cop0-dist">—</span>
+      <span class="badge standby" id="cop0-badge">STANDBY</span></div>
+    <div class="cop"><span>VICTOR-7</span><span class="dist" id="cop1-dist">—</span>
+      <span class="badge standby" id="cop1-badge">STANDBY</span></div>
+    <div class="cop"><span>DELTA-5</span><span class="dist" id="cop2-dist">—</span>
       <span class="badge standby" id="cop2-badge">STANDBY</span></div>
+    <div class="cop"><span>ECHO-9</span><span class="dist" id="cop3-dist">—</span>
+      <span class="badge standby" id="cop3-badge">STANDBY</span></div>
+    <div class="cop"><span>AIR-1</span><span class="dist" id="cop4-dist">—</span>
+      <span class="badge standby" id="cop4-badge">STANDBY</span></div>
   </div>
 
   <div id="vehicle" class="panel">
@@ -289,6 +345,96 @@
     <div class="slot-save"><b>SLOT 3 · EMPTY</b>Start a new game here</div>
   </div>
   <div class="foot">An original open-world crime game · made in code with three.js · press Enter</div>
+</div>
+
+<div id="pause-menu" class="overlay hidden">
+  <div class="pause-inner panel">
+    <h2>Paused</h2>
+    <div class="sub">San Amaro · ESC to resume</div>
+    <div class="pause-cols">
+      <div class="pause-map">
+        <div class="kicker">City Map — San Amaro</div>
+        <canvas id="pause-map" width="640" height="640"></canvas>
+        <div class="map-legend">
+          <span><b style="color:#fff">▲</b> You</span>
+          <span><b style="color:#ffd23e">◆</b> Mission</span>
+          <span><b style="color:#22e6ff">┄</b> Route</span>
+          <span><b style="color:#ff2a1a">●</b> Police</span>
+          <span><b style="color:#2aff5a">■</b> Garage</span>
+          <span><b style="color:#ff2e88">★</b> Landmark</span>
+        </div>
+      </div>
+      <div class="pause-profile">
+        <div class="kicker">Player Profile</div>
+        <div id="profile-body"></div>
+      </div>
+    </div>
+    <div class="pause-btns">
+      <button id="btn-resume" class="primary">Resume</button>
+      <button id="btn-save">Save Game</button>
+      <button id="btn-settings">Settings</button>
+      <button id="btn-pause-controls">Controls</button>
+      <button id="btn-mainmenu">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="controls-page" class="overlay hidden">
+  <div class="panel overlay-card">
+    <h2>Controls</h2>
+    <div class="sub">Keyboard + mouse — the only input in this build.</div>
+    <table class="ctrl-table">
+      <tr><td>W A S D / Arrows</td><td>Walk / drive</td></tr>
+      <tr><td>Shift</td><td>Sprint on foot · Nitro while driving</td></tr>
+      <tr><td>Space</td><td>Handbrake</td></tr>
+      <tr><td>E</td><td>Enter / steal car · Interact (clues, envelopes)</td></tr>
+      <tr><td>Mouse</td><td>Aim (camera follows) · Click to attack / shoot</td></tr>
+      <tr><td>1 – 5</td><td>Select weapon (Fists, Pistol, SMG, Scattergun, Longshot)</td></tr>
+      <tr><td>R</td><td>Change radio station</td></tr>
+      <tr><td>F / G / H</td><td>At Palm &amp; Piston: repair $150 · armor $200 · ammo $100</td></tr>
+      <tr><td>M</td><td>Save game</td></tr>
+      <tr><td>Esc</td><td>Pause menu</td></tr>
+      <tr><td>Enter</td><td>Start game (from the main menu)</td></tr>
+    </table>
+    <p class="sub">Controller / gamepad: not supported in this build — keyboard + mouse only.</p>
+    <div style="margin-top:16px"><button id="btn-controls-back" class="primary">Back</button></div>
+  </div>
+</div>
+
+<div id="settings-page" class="overlay hidden">
+  <div class="panel overlay-card">
+    <h2>Settings</h2>
+    <div class="sub">Applied immediately. Mood and sound are saved.</div>
+    <div class="set-row"><span class="lbl">TIME OF DAY</span>
+      <span class="seg" id="set-mood">
+        <button data-mood="day">Day</button>
+        <button data-mood="golden">Golden</button>
+        <button data-mood="bluehour">Blue Hour</button>
+        <button data-mood="night">Night</button>
+      </span></div>
+    <div class="set-row"><span class="lbl">SOUND</span>
+      <span class="seg" id="set-sound">
+        <button data-sound="on">On</button>
+        <button data-sound="off">Off</button>
+      </span></div>
+    <div class="set-row"><span class="lbl">BLOOM</span>
+      <span class="seg" id="set-bloom">
+        <button data-bloom="on">On</button>
+        <button data-bloom="off">Off</button>
+      </span></div>
+    <div style="margin-top:16px"><button id="btn-settings-back" class="primary">Back</button></div>
+  </div>
+</div>
+
+<div id="confirm-box" class="overlay hidden">
+  <div class="panel overlay-card">
+    <h2 id="confirm-title">Overwrite save?</h2>
+    <p class="sub" id="confirm-text"></p>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button id="btn-confirm-yes" class="primary">Yes, overwrite</button>
+      <button id="btn-confirm-no">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <script src="./vendor/three.min.js"></script>

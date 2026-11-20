@@ -21,13 +21,22 @@ function ensure() {
     if (!AC) return false;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = muted ? 0 : 0.5;
     master.connect(ctx.destination);
     return true;
   } catch { return false; }
 }
 export function initAudio() { return ensure(); }
 export function resumeAudio() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+// Mute the master gain (Settings). Persists only for this session; the
+// Settings menu stores the choice in localStorage and re-applies it.
+let muted = false;
+export function setMuted(m) {
+  muted = !!m;
+  if (master && ctx) master.gain.setTargetAtTime(muted ? 0 : 0.5, ctx.currentTime, 0.05);
+  return muted;
+}
+export function isMuted() { return muted; }
 
 function noiseBuffer(dur = 0.3) {
   const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);

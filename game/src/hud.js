@@ -233,5 +233,118 @@ export function drawMinimap(state) {
   g.fillText('W', 14, S / 2); g.fillText('E', S - 14, S / 2);
 }
 
+// Street-following route (player -> nearest street -> marker's street ->
+// marker). The segments run along the 60 m street grid, so the line stays
+// on roads except for the short walk to the nearest street.
+function streetRoute(px, pz, mx, mz) {
+  const snap = (v) => Math.round(v / 60) * 60;
+  const sx = snap(px), tx = snap(mx), tz = snap(mz);
+  const pts = [{ x: px, z: pz }];
+  if (sx !== px) pts.push({ x: sx, z: pz });
+  if (tz !== pz) pts.push({ x: sx, z: tz });
+  if (tx !== sx) pts.push({ x: tx, z: tz });
+  const last = pts[pts.length - 1];
+  if (last.x !== mx || last.z !== mz) pts.push({ x: mx, z: mz });
+  return pts;
+}
+
+// Pause-menu city map: the same layout as the minimap, large, with
+// district + street names, landmarks, player, mission marker, police and
+// a route to the next mission. Only places that really exist are shown
+// (garage, Spire, Fountain Plaza, Lift Bridge) — no invented safehouse,
+// clinic or police station.
+export function drawPauseMap(state) {
+  const c = $('pause-map');
+  if (!c) return;
+  const g = c.getContext('2d');
+  const S = c.width; // 640
+  const px = (x) => ((x - MAP.x0) / (MAP.x1 - MAP.x0)) * S;
+  const py = (z) => ((z - MAP.z0) / (MAP.z1 - MAP.z0)) * S;
+  g.clearRect(0, 0, S, S);
+  g.fillStyle = '#0a0d18'; g.fillRect(0, 0, S, S);
+  // blocks
+  g.fillStyle = 'rgba(255,255,255,.05)';
+  for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) {
+    g.fillRect(px(-270 + i * 60), py(-270 + j * 60), px(48) - px(0), py(48) - py(0));
+  }
+  // canal (north band) + lift bridge
+  g.fillStyle = '#1b6a7d';
+  g.fillRect(0, py(-302), S, py(-262) - py(-302));
+  g.fillStyle = '#2fa8a0';
+  g.fillRect(px(-8), py(-302), px(8) - px(-8), py(-262) - py(-302));
+  // streets
+  g.strokeStyle = 'rgba(255,255,255,.42)'; g.lineWidth = 4;
+  for (const z of STREETS) { g.beginPath(); g.moveTo(0, py(z)); g.lineTo(S, py(z)); g.stroke(); }
+  for (const x of STREETS) { g.beginPath(); g.moveTo(px(x), 0); g.lineTo(px(x), S); g.stroke(); }
+  // district labels
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '900 15px system-ui';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const districts = [
+    ['DOWNTOWN CORE', 0, 0], ['SPIRE DISTRICT', 90, -90], ['SUNSET PLAZA', -90, 30],
+    ['COMMERCIAL ROW', 150, 0], ['PALM COURTS', -180, 180], ['THE YARDS', 180, 180],
+  ];
+  for (const [name, x, z] of districts) g.fillText(name, px(x), py(z));
+  // main street names (along the two central roads)
+  g.fillStyle = 'rgba(255,255,255,.4)'; g.font = '700 12px system-ui';
+  g.fillText('LANTERN BLVD', px(120), py(0) - 12);
+  g.fillText('SUNSET AVE', px(0) + 44, py(120));
+  g.fillText('PALM ROW', px(120), py(60) - 12);
+  // landmarks (pink stars): Glass Spire, Fountain Plaza, Lift Bridge
+  const star = (x, z) => {
+    const sx = px(x), sy = py(z);
+    g.fillStyle = '#ff2e88';
+    g.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i * 4 * Math.PI) / 5;
+      const r = i % 2 === 0 ? 9 : 4;
+      const vx = sx + Math.cos(a) * r, vy = sy + Math.sin(a) * r;
+      if (i === 0) g.moveTo(vx, vy); else g.lineTo(vx, vy);
+    }
+    g.closePath(); g.fill();
+  };
+  star(90, -90); star(-90, 30); star(0, -282);
+  // garage (green square): Palm & Piston, where Nadia is
+  if (state.garage) {
+    g.fillStyle = '#2aff5a';
+    g.fillRect(px(state.garage.x) - 7, py(state.garage.z) - 7, 14, 14);
+  }
+  // route to the mission (dashed gold, street-following)
+  if (state.player && state.marker) {
+    const pts = streetRoute(state.player.x, state.player.z, state.marker.x, state.marker.z);
+    g.strokeStyle = '#22e6ff'; g.lineWidth = 3; g.setLineDash([10, 7]);
+    g.beginPath();
+    pts.forEach((p, i) => { if (i === 0) g.moveTo(px(p.x), py(p.z)); else g.lineTo(px(p.x), py(p.z)); });
+    g.stroke();
+    g.setLineDash([]);
+  }
+  // mission marker (gold diamond)
+  if (state.marker) {
+    const mx = px(state.marker.x), my = py(state.marker.z);
+    g.fillStyle = '#ffd23e';
+    g.beginPath(); g.moveTo(mx, my - 12); g.lineTo(mx + 12, my); g.lineTo(mx, my + 12); g.lineTo(mx - 12, my); g.closePath(); g.fill();
+    g.strokeStyle = '#0d0f1a'; g.lineWidth = 2; g.stroke();
+  }
+  // police (red dots)
+  for (const p of state.police || []) {
+    g.fillStyle = p.color || '#ff2a1a';
+    g.beginPath(); g.arc(px(p.x), py(p.z), 7, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.stroke();
+  }
+  // player arrow (white, rotated by heading)
+  if (state.player) {
+    const x = px(state.player.x), y = py(state.player.z);
+    g.save(); g.translate(x, y); g.rotate(state.player.heading || 0);
+    g.fillStyle = '#fff';
+    g.beginPath(); g.moveTo(0, -14); g.lineTo(10, 11); g.lineTo(-10, 11); g.closePath(); g.fill();
+    g.strokeStyle = '#0d0f1a'; g.lineWidth = 2; g.stroke();
+    g.restore();
+  }
+  // compass
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '900 18px system-ui';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('N', S / 2, 16); g.fillText('S', S / 2, S - 16);
+  g.fillText('W', 16, S / 2); g.fillText('E', S - 16, S / 2);
+}
+
 export function showHUD() { $('hud').classList.remove('hidden'); }
 export function hideHUD() { $('hud').classList.add('hidden'); }

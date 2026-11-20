@@ -204,20 +204,24 @@ export function makeTraffic(scene, count = 30) {
       group.rotation.y = dir > 0 ? Math.PI : 0;
     }
     scene.add(group);
-    cars.push({ group, alongZ, street, dir, lane, speed: 7 + (i % 5) * 1.6, pos });
+    cars.push({ group, alongZ, street, dir, lane, speed: 7 + (i % 5) * 1.6, pos, slowT: 0 });
   }
   return {
     cars,
+    // Briefly slow one car (collision reaction): it recovers on its own.
+    slowCar(c, seconds = 0.8) { c.slowT = Math.max(c.slowT || 0, seconds); },
     update(dt) {
       for (const c of cars) {
-        c.pos += c.dir * c.speed * dt;
+        const sp = c.slowT > 0 ? c.speed * 0.5 : c.speed;
+        if (c.slowT > 0) c.slowT -= dt;
+        c.pos += c.dir * sp * dt;
         if (c.pos > 285) c.pos = -285;
         if (c.pos < -285) c.pos = 285;
         if (c.alongZ) c.group.position.x = c.pos;
         else c.group.position.z = c.pos;
         // spin wheels
         const w = c.group.userData.wheels;
-        for (const wh of w) wh.rotation.x += (c.speed * dt) / 0.34;
+        for (const wh of w) wh.rotation.x += (sp * dt) / 0.34;
       }
     },
   };

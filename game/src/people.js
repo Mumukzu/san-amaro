@@ -147,6 +147,26 @@ export function buildNadia() {
   return p;
 }
 
+// Theo (race driver / street king) — grey hair, stubble, grey jacket.
+export function buildTheo() {
+  const p = buildPerson({
+    skin: 0xe8b88a, hair: 0x8a8a8a, shirt: 0xc8c0b8, pants: 0x2a2a2e,
+    shoes: 0xf2f2f2, stubble: true,
+  });
+  // dark shades: a flat visor across the eyes
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.09, 0.06), mat(0x14141a, 0.4));
+  visor.position.set(0, 1.72, 0.22); p.group.add(visor);
+  return p;
+}
+
+// Mara (the fixer) — blonde hair, cyan top.
+export function buildMara() {
+  return buildPerson({
+    skin: 0xf2c9a0, hair: 0xe8c85a, shirt: 0x22e6ff, pants: 0x1c2a4a,
+    shoes: 0xf2f2f2,
+  });
+}
+
 // The Longshot rifle (matte grey, long barrel, scope). Held by Jay when aiming.
 export function buildRifle() {
   const g = new THREE.Group();
@@ -222,14 +242,34 @@ export function makePedestrians(scene, count = 60, layout = null) {
     walkers.push({
       p, alongZ, street, side, dir, pos,
       speed: 1.1 + (i % 4) * 0.25, phase: (i * 1.7) % (Math.PI * 2),
-      fleeing: false,
+      fleeing: false, downT: 0,
     });
   }
   return {
     walkers,
     setFleeing(on) { for (const w of walkers) w.fleeing = on; },
+    // Knock a walker down (hit by a car): they fall, stay down ~3 s,
+    // then get up and flee. Returns false if already down.
+    knockDown(w) {
+      if (w.downT > 0) return false;
+      w.downT = 3;
+      w.p.group.rotation.x = -1.2;
+      w.p.group.position.y = 0.3;
+      return true;
+    },
     update(dt) {
       for (const w of walkers) {
+        // down: count down, stay put; get up and flee when the timer ends
+        if (w.downT > 0) {
+          w.downT -= dt;
+          if (w.downT <= 0) {
+            w.downT = 0;
+            w.p.group.rotation.x = 0;
+            w.p.group.position.y = 0;
+            w.fleeing = true;
+          }
+          continue;
+        }
         const sp = w.fleeing ? w.speed * 3.4 : w.speed;
         w.pos += w.dir * sp * dt;
         if (w.pos > 280) w.pos = -280;
