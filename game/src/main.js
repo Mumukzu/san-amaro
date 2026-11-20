@@ -828,6 +828,7 @@ try { if (localStorage.getItem('san-amaro-bloom') === '0') setBloom(false); } ca
 function togglePause() {
   if (state.mode === 'play') {
     state.mode = 'pause';
+    Audio.pauseAudio();
     populatePauseMenu();
     $('pause-menu').classList.remove('hidden');
   } else if (state.mode === 'pause') {
@@ -839,6 +840,9 @@ function resumeGame() {
   $('controls-page').classList.add('hidden');
   $('settings-page').classList.add('hidden');
   state.mode = 'play';
+  // restore only the audio that should be live now (radio at its last
+  // station, siren only if wanted, engine only if driving)
+  Audio.resumePausedAudio({ driving: state.driving, wanted: state.wanted, station: state.radio });
 }
 function populatePauseMenu() {
   const target = state.driving && state.car ? state.car.group.position : jay.group.position;
@@ -1030,6 +1034,7 @@ function tryEnterExitCar() {
     jay.group.position.set(c.group.position.x - 2.2, 0, c.group.position.z + 1.5);
     jay.group.rotation.y = c.group.rotation.y;
     state.car = null; state.speed = 0;
+    Audio.engineFadeOut();
     Audio.blip(420);
     return;
   }
@@ -1055,6 +1060,7 @@ function tryEnterExitCar() {
     if (d < 4.5) {
       state.driving = true; state.car = car; state.carId = id;
       jay.group.visible = false;
+      Audio.engineStart();
       Audio.blip(520);
       // stealing a car is a crime — wanted 1, or 3 for the prize Comet
       setWanted(id === 'prize' ? 3 : 1);

@@ -8,6 +8,17 @@ let engineOsc = null, engineFilter = null, engineGain = null;
 let sirenOsc = null, sirenGain = null, sirenTimer = 0, sirenHi = false;
 let radioTimer = null, radioStep = 0, radioStation = 0;
 
+// ---- pause / resume state ----
+// Snapshot of which loops were live when the game was paused, so resume
+// restores exactly those (radio at its last station, siren only if wanted,
+// engine only if driving, ambience if it was on). Every start has a guard
+// and every stop nulls its handle, so no duplicate oscillator/node can
+// accumulate across pause/resume cycles.
+let paused = false;
+let pauseSnap = null;
+let stopTimer = null;
+let engineStopTimer = null;
+
 const STATIONS = [
   { name: 'NEON TIDE 102.5', bpm: 96, scale: [0, 3, 5, 7, 10, 12, 15], wave: 'triangle', base: 220 },
   { name: '107.3 THE DOCK', bpm: 128, scale: [0, 2, 5, 7, 9, 12], wave: 'sawtooth', base: 165 },
@@ -47,6 +58,8 @@ function noiseBuffer(dur = 0.3) {
 
 // ---- engine hum (sawtooth + lowpass, pitch follows speed) ----
 export function engineStart() {
+  // re-entering a car cancels a pending fade-out stop from engineFadeOut()
+  clearTimeout(engineStopTimer); engineStopTimer = null;
   if (!ensure() || engineOsc) return;
   engineOsc = ctx.createOscillator();
   engineOsc.type = 'sawtooth';
@@ -66,6 +79,20 @@ export function engineSet(speedKmh, on) {
 }
 export function engineStop() {
   if (engineOsc) { try { engineOsc.stop(); } catch {} engineOsc = null; }
+  // disconnect the filter/gain so repeated start/stop cycles don't leave
+  // orphaned nodes connected to master
+  if (engineGain) { try { engineGain.disconnect(); } catch {} engineGain = null; }
+  engineFilter = null;
+}
+
+// Fade the engine hum out, then stop the oscillator (used when leaving a
+// car, so no silent engine node is left running). Re-entering a car
+// cancels the pending stop via engineStart().
+export function engineFadeOut() {
+  if (!engineOsc || !ctx) return;
+  if (engineGain) engineGain.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+  clearTimeout(engineStopTimer);
+  engineStopTimer = setTimeout(() => { engineStopTimer = null; engineStop(); }, 220);
 }
 
 // ---- nitro boost whoosh (filtered noise sweeping up) ----
@@ -103,11 +130,12 @@ export function ambienceStart() {
   lfo.connect(lfoGain).connect(f.frequency);
   src.connect(f).connect(g).connect(master);
   src.start(); lfo.start();
-  ambNodes = { src, lfo };
+  ambNodes = { src, lfo, g };
 }
 export function ambienceStop() {
   if (!ambNodes) return;
   try { ambNodes.src.stop(); ambNodes.lfo.stop(); } catch {}
+  try { if (ambNodes.g) ambNodes.g.disconnect(); } catch {}
   ambNodes = null;
 }
 
@@ -131,6 +159,7 @@ export function sirenUpdate(dt) {
 }
 export function sirenStop() {
   if (sirenOsc) { try { sirenOsc.stop(); } catch {} sirenOsc = null; }
+  if (sirenGain) { try { sirenGain.disconnect(); } catch {} sirenGain = null; }
 }
 
 // ---- gunshot (noise burst + low thump) ----
@@ -205,4 +234,61 @@ export function radioTracks(i) {
     ['“Chrome Dreams” — Lil Vex', 'Hip-hop · All vibe'],
   ];
   return t[i % t.length];
+}
+
+// ---- pause / resume ----
+// pauseAudio() snapshots which loops are live, fades their gains to 0
+// (smooth, no harsh cut), stops the radio interval (the current note
+// decays on its own), then stops the faded sources so no silent
+// oscillator/node keeps running. resumePausedAudio() restores only what
+// should be live now, using the caller's current game state (driving /
+// wanted / station) over the snapshot, and is idempotent.
+export function pauseAudio() {
+  if (!ctx || paused) return;
+  paused = true;
+  pauseSnap = {
+    engine: !!engineOsc,
+    siren: !!sirenOsc,
+    radio: !!radioTimer,
+    station: radioStation,
+    amb: !!ambNodes,
+  };
+  const t = ctx.currentTime;
+  if (engineGain) engineGain.gain.setTargetAtTime(0, t, 0.05);
+  if (sirenGain) sirenGain.gain.setTargetAtTime(0, t, 0.05);
+  if (ambNodes && ambNodes.g) ambNodes.g.gain.setTargetAtTime(0, t, 0.05);
+  radioStop();
+  clearTimeout(stopTimer);
+  stopTimer = setTimeout(() => { stopTimer = null; engineStop(); sirenStop(); ambienceStop(); }, 200);
+}
+export function resumePausedAudio(want = {}) {
+  if (!ctx) return;
+  if (!paused) { resumeAudio(); return; }
+  paused = false;
+  clearTimeout(stopTimer); stopTimer = null;
+  resumeAudio();
+  const snap = pauseSnap || {};
+  pauseSnap = null;
+  const driving = want.driving !== undefined ? want.driving : !!snap.engine;
+  const wanted = want.wanted !== undefined ? want.wanted : (snap.siren ? 1 : 0);
+  const station = want.station !== undefined ? want.station : (snap.station ?? 0);
+  // engine: recreate only if driving (the driving loop's engineSet ramps
+  // the gain back up); if not driving, leave it stopped — entering a car
+  // recreates it via engineStart()
+  if (driving) { if (!engineOsc) engineStart(); }
+  else if (engineOsc) engineStop();
+  // siren: recreate only if wanted; if the osc survived the pause (stop
+  // was cancelled), ramp its gain back instead of duplicating it
+  if (wanted > 0) {
+    if (!sirenOsc) sirenStart();
+    else if (sirenGain) sirenGain.gain.setTargetAtTime(0.035, ctx.currentTime, 0.08);
+  }
+  // ambience: recreate if it was on; if the nodes survived, ramp the gain back
+  if (snap.amb) {
+    if (!ambNodes) ambienceStart();
+    else if (ambNodes.g) ambNodes.g.gain.setTargetAtTime(0.02, ctx.currentTime, 0.08);
+  }
+  // radio: restart at the last station if it was playing (radioStart
+  // stops any existing interval first, so no duplicate sequencer)
+  if (snap.radio) radioStart(station);
 }
