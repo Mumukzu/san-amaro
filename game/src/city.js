@@ -78,7 +78,7 @@ function facadeTexture(base, lit, opts = {}) {
   const cols = opts.cols || 8, rows = opts.rows || 14;
   const inset = opts.inset ?? 3;
   const bandEvery = opts.bandEvery || 0;
-  const bandColor = opts.bandColor || 'rgba(0,0,0,.25)';
+  const bandColor = opts.bandColor || 'rgba(0,0,0,.15)';
   const litPalette = opts.litPalette || ['#c98a3d', '#b87a2e', '#d9a55a', '#a86a2a', '#cfe8ff', '#ffd9a0'];
   return canvasTex(256, 448, (g, w, h) => {
     g.fillStyle = base; g.fillRect(0, 0, w, h);
@@ -93,9 +93,10 @@ function facadeTexture(base, lit, opts = {}) {
           g.fillStyle = 'rgba(255,255,255,.08)';
           g.fillRect(px, py, cw - inset * 2, 3);
         } else {
-          // Unlit panes: a lighter blue-grey now (was near-black) so glass
-          // towers read as blue glass in daylight instead of black slabs.
-          g.fillStyle = opts.unlit || 'rgba(16,26,44,.8)'; g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
+          // Unlit panes: a mid blue-grey (was near-black navy) so glass
+          // towers read as coloured glass in daylight instead of black slabs,
+          // and stay readable as panes at blue hour / night.
+          g.fillStyle = opts.unlit || 'rgba(88,118,150,.8)'; g.fillRect(px, py, cw - inset * 2, ch - inset * 2.4);
           g.fillStyle = 'rgba(255,255,255,.06)';
           g.fillRect(px, py, cw - inset * 2, 3);
         }
@@ -173,7 +174,7 @@ function initMaterials() {
   MAT.water = new THREE.MeshStandardMaterial({
     color: 0x1b6a7d, roughness: 0.14, metalness: 0.88, envMapIntensity: 1.5,
   });
-  MAT.roof = new THREE.MeshStandardMaterial({ color: 0x3a3640, roughness: 0.95 });
+  MAT.roof = new THREE.MeshStandardMaterial({ color: 0x6a6258, roughness: 0.95 });
   MAT.bridgeDeck = new THREE.MeshStandardMaterial({ color: 0x2e3a4a, roughness: 0.9, metalness: 0.1 });
   MAT.awningPink = new THREE.MeshStandardMaterial({ color: 0xd94f7a, roughness: 0.7 });
   MAT.awningTeal = new THREE.MeshStandardMaterial({ color: 0x2fa8a0, roughness: 0.7 });
@@ -576,32 +577,35 @@ export function buildCity(scene) {
   // Visual upgrade: the old 8 saturated bases (#3a6a7a teal, #8a4a5e pink,
   // #5a7a4e green...) painted every building one flat colour with the same
   // 8x14 window grid — the city read as repeated coloured boxes. Now each
-  // ZONE has its own architectural identity, with material-based,
-  // desaturated palettes and a different facade texture per kind:
-  //   downtown  — blue-glass curtain walls + grey concrete towers
-  //   commercial — brick / warm concrete with balconies and cornices
+  // ZONE has its own architectural identity, with bright coastal palettes
+  // and a different facade texture per kind:
+  //   downtown  — sky/ocean blue + turquoise glass, white + silver towers
+  //   commercial — ivory / white / cream with coral, terracotta, soft orange
   //   residential — pastel houses with pitched roofs, porches, chimneys
-  //   industrial — muted warehouses with monitor roofs + roller doors
+  //   industrial — sage / mint / warm grey / terracotta warehouses
   const FACADES = {
     downtown: [
-      { kind: 'glass', base: '#2a4a6a', lit: 0.22 }, { kind: 'glass', base: '#1e3a55', lit: 0.18 },
-      { kind: 'glass', base: '#3a5a7a', lit: 0.25 }, { kind: 'concrete', base: '#8a8578', lit: 0.3 },
-      { kind: 'concrete', base: '#6a6a72', lit: 0.28 }, { kind: 'concrete', base: '#9a8a7a', lit: 0.3 },
-      { kind: 'glass', base: '#4a6a7a', lit: 0.2 }, { kind: 'concrete', base: '#7a7468', lit: 0.26 },
+      { kind: 'glass', base: '#4a8ab8', lit: 0.22 }, { kind: 'glass', base: '#3a7ab8', lit: 0.2 },
+      { kind: 'glass', base: '#4ab8c0', lit: 0.22 }, { kind: 'glass', base: '#7ab8d8', lit: 0.25 },
+      { kind: 'glass', base: '#6a9ab8', lit: 0.2 }, { kind: 'concrete', base: '#d8dce0', lit: 0.3 },
+      { kind: 'concrete', base: '#b0b8c0', lit: 0.28 }, { kind: 'concrete', base: '#c8c0b0', lit: 0.3 },
     ],
     commercial: [
-      { kind: 'concrete', base: '#7a6a5e', lit: 0.32 }, { kind: 'concrete', base: '#8a7a6a', lit: 0.3 },
-      { kind: 'concrete', base: '#5a6a6e', lit: 0.3 }, { kind: 'brick', base: '#8a5a48', lit: 0.3 },
-      { kind: 'concrete', base: '#9a8a7a', lit: 0.32 }, { kind: 'glass', base: '#3a5a6a', lit: 0.25 },
+      { kind: 'concrete', base: '#e8e0d0', lit: 0.32 }, { kind: 'concrete', base: '#e8e8e0', lit: 0.3 },
+      { kind: 'concrete', base: '#e0d0b0', lit: 0.32 }, { kind: 'concrete', base: '#d88a7a', lit: 0.3 },
+      { kind: 'brick', base: '#c87a5a', lit: 0.3 }, { kind: 'concrete', base: '#d8a878', lit: 0.32 },
+      { kind: 'glass', base: '#5a9ab8', lit: 0.25 }, { kind: 'concrete', base: '#d0b898', lit: 0.3 },
     ],
     residential: [
       { kind: 'house', base: '#c8b8a0', lit: 0.4 }, { kind: 'house', base: '#a8b8c8', lit: 0.4 },
       { kind: 'house', base: '#d8c8b8', lit: 0.4 }, { kind: 'house', base: '#b8c8b0', lit: 0.4 },
-      { kind: 'house', base: '#c8a8a8', lit: 0.4 },
+      { kind: 'house', base: '#c8a8a8', lit: 0.4 }, { kind: 'house', base: '#e0c878', lit: 0.4 },
     ],
     industrial: [
-      { kind: 'industrial', base: '#6a6a60', lit: 0.15 }, { kind: 'industrial', base: '#7a5a44', lit: 0.15 },
-      { kind: 'industrial', base: '#5a6a5a', lit: 0.15 }, { kind: 'industrial', base: '#5a5a6a', lit: 0.15 },
+      { kind: 'industrial', base: '#8a9a7a', lit: 0.2 }, { kind: 'industrial', base: '#9ab8a0', lit: 0.2 },
+      { kind: 'industrial', base: '#a89a8a', lit: 0.2 }, { kind: 'industrial', base: '#b87a5a', lit: 0.2 },
+      { kind: 'industrial', base: '#a8b8a0', lit: 0.2 }, { kind: 'industrial', base: '#b8a888', lit: 0.2 },
+      { kind: 'industrial', base: '#8a9aa8', lit: 0.2 }, { kind: 'industrial', base: '#a8886a', lit: 0.2 },
     ],
   };
   // Placement on a building's street-facing side: `along` is the distance
@@ -684,7 +688,7 @@ export function buildCity(scene) {
   function addShopfront(parent, faceW, faceD, front, name, col) {
     const g = new THREE.Group();
     box(faceW * 0.9, 4.2, 0.8,
-      new THREE.MeshStandardMaterial({ color: 0x1c1f2a, roughness: 0.4, metalness: 0.3 }),
+      new THREE.MeshStandardMaterial({ color: 0x2e3242, roughness: 0.4, metalness: 0.3 }),
       0, 2.1, faceD / 2 + 0.2, g);
     const st = signTexture(name, col, '#0d0f18');
     const sp = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(14, faceW * 0.7), 2.6),
@@ -713,8 +717,8 @@ export function buildCity(scene) {
     const litJ = Math.min(0.45, f.lit + (lb.lit - 0.3));
     let tex, mat;
     if (f.kind === 'glass') {
-      tex = facadeTexture(f.base, litJ, { cols: 10, rows: 18, inset: 2, bandEvery: 3, bandColor: 'rgba(0,0,0,.35)', litPalette: ['#ffd9a0', '#cfe8ff', '#fff2cc', '#d9a55a'] });
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.22, metalness: 0.65, envMapIntensity: 1.3 });
+      tex = facadeTexture(f.base, litJ, { cols: 10, rows: 18, inset: 2, bandEvery: 3, bandColor: 'rgba(0,0,0,.15)', litPalette: ['#ffd9a0', '#cfe8ff', '#fff2cc', '#d9a55a'] });
+      mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.22, metalness: 0.45, envMapIntensity: 1.3 });
     } else if (f.kind === 'house') {
       tex = facadeTexture(f.base, litJ, { cols: 3, rows: 3, inset: 6, litPalette: ['#ffd9a0', '#fff2cc'] });
       mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05 });
