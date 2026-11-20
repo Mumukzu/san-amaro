@@ -4,7 +4,7 @@
 // gesture so autoplay rules never throw. Written from scratch.
 let ctx = null;
 let master = null;
-let engineOsc = null, engineFilter = null, engineGain = null;
+let engineOsc = null, engineOsc2 = null, engineFilter = null, engineGain = null, engineGain2 = null, engineProfile = null;
 let sirenOsc = null, sirenGain = null, sirenTimer = 0, sirenHi = false;
 let radioTimer = null, radioStep = 0, radioStation = 0;
 
@@ -56,33 +56,76 @@ function noiseBuffer(dur = 0.3) {
   return b;
 }
 
-// ---- engine hum (sawtooth + lowpass, pitch follows speed) ----
-export function engineStart() {
+// ---- vehicle sound identity (AUDIO-03) ----
+// Each vehicle family gets a distinct procedural engine voice (two
+// oscillators through a lowpass, so the character is audible at idle
+// and follows speed). profileFor() normalizes both car ids and spec
+// kinds: 'comet'/'prize'/'Sports'/'Police' -> sports, 'Muscle' ->
+// muscle, 'Truck'/'Van' -> truck, everything else (sedan, Sedan, Taxi,
+// Pickup, Lowrider, unknown) -> car. No motorcycle exists in the game
+// (no SPECS entry, no traffic/parked/player bike), so no motorcycle
+// voice is wired — inventing one would mean a new vehicle model.
+const ENGINE_PROFILES = {
+  car:    { wave: 'sawtooth', base: 55, slope: 1.4, wave2: 'triangle', detune2: 0, oct2: 2,   gain2: 0.35, filterBase: 420, filterSlope: 8,  gainBase: 0.05,  gainSlope: 0.0006, gainMax: 0.09 },
+  muscle: { wave: 'sawtooth', base: 42, slope: 1.5, wave2: 'sawtooth', detune2: 6, oct2: 1,   gain2: 0.6,  filterBase: 380, filterSlope: 7,  gainBase: 0.06,  gainSlope: 0.0006, gainMax: 0.09 },
+  truck:  { wave: 'square',   base: 34, slope: 0.9, wave2: 'sine',     detune2: 0, oct2: 0.5, gain2: 0.8,  filterBase: 240, filterSlope: 5,  gainBase: 0.07,  gainSlope: 0.0005, gainMax: 0.08 },
+  sports: { wave: 'sawtooth', base: 72, slope: 2.0, wave2: 'sawtooth', detune2: 8, oct2: 1,   gain2: 0.5,  filterBase: 650, filterSlope: 12, gainBase: 0.055, gainSlope: 0.0008, gainMax: 0.10 },
+};
+function profileFor(key) {
+  switch (key) {
+    case 'comet': case 'prize': case 'sports': case 'Sports': case 'Police': return 'sports';
+    case 'muscle': case 'Muscle': return 'muscle';
+    case 'truck': case 'Truck': case 'van': case 'Van': return 'truck';
+    default: return 'car';
+  }
+}
+
+// ---- engine hum (per-type voice: osc pair + lowpass, pitch follows speed) ----
+export function engineStart(type) {
   // re-entering a car cancels a pending fade-out stop from engineFadeOut()
   clearTimeout(engineStopTimer); engineStopTimer = null;
-  if (!ensure() || engineOsc) return;
+  if (!ensure()) return;
+  const prof = profileFor(type);
+  if (engineOsc) {
+    if (engineProfile === prof) return; // same voice, just cancelled a fade-out
+    engineStop(); // different vehicle: rebuild the voice with the new profile
+  }
+  engineProfile = prof;
+  const P = ENGINE_PROFILES[prof];
   engineOsc = ctx.createOscillator();
-  engineOsc.type = 'sawtooth';
-  engineOsc.frequency.value = 55;
+  engineOsc.type = P.wave;
+  engineOsc.frequency.value = P.base;
+  engineOsc2 = ctx.createOscillator();
+  engineOsc2.type = P.wave2;
+  engineOsc2.frequency.value = P.base * P.oct2 + P.detune2;
   engineFilter = ctx.createBiquadFilter();
-  engineFilter.type = 'lowpass'; engineFilter.frequency.value = 420;
+  engineFilter.type = 'lowpass'; engineFilter.frequency.value = P.filterBase;
   engineGain = ctx.createGain(); engineGain.gain.value = 0.0;
-  engineOsc.connect(engineFilter).connect(engineGain).connect(master);
-  engineOsc.start();
+  engineGain2 = ctx.createGain(); engineGain2.gain.value = P.gain2;
+  engineOsc.connect(engineFilter);
+  engineOsc2.connect(engineGain2).connect(engineFilter);
+  engineFilter.connect(engineGain).connect(master);
+  engineOsc.start(); engineOsc2.start();
 }
 export function engineSet(speedKmh, on) {
   if (!engineOsc) return;
+  const P = ENGINE_PROFILES[engineProfile || 'car'];
   const t = ctx.currentTime;
-  engineOsc.frequency.setTargetAtTime(48 + speedKmh * 1.6, t, 0.08);
-  engineFilter.frequency.setTargetAtTime(320 + speedKmh * 9, t, 0.1);
-  engineGain.gain.setTargetAtTime(on ? 0.05 + Math.min(0.09, speedKmh * 0.0006) : 0.0, t, 0.12);
+  const f1 = P.base + speedKmh * P.slope;
+  engineOsc.frequency.setTargetAtTime(f1, t, 0.08);
+  if (engineOsc2) engineOsc2.frequency.setTargetAtTime(f1 * P.oct2 + P.detune2, t, 0.08);
+  engineFilter.frequency.setTargetAtTime(P.filterBase + speedKmh * P.filterSlope, t, 0.1);
+  engineGain.gain.setTargetAtTime(on ? P.gainBase + Math.min(P.gainMax, speedKmh * P.gainSlope) : 0.0, t, 0.12);
 }
 export function engineStop() {
   if (engineOsc) { try { engineOsc.stop(); } catch {} engineOsc = null; }
+  if (engineOsc2) { try { engineOsc2.stop(); } catch {} engineOsc2 = null; }
   // disconnect the filter/gain so repeated start/stop cycles don't leave
   // orphaned nodes connected to master
   if (engineGain) { try { engineGain.disconnect(); } catch {} engineGain = null; }
-  engineFilter = null;
+  if (engineGain2) { try { engineGain2.disconnect(); } catch {} engineGain2 = null; }
+  if (engineFilter) { try { engineFilter.disconnect(); } catch {} engineFilter = null; }
+  engineProfile = null;
 }
 
 // Fade the engine hum out, then stop the oscillator (used when leaving a
@@ -233,6 +276,185 @@ export function crash(severity = 'medium', kind = 'car') {
   return true;
 }
 
+// ---- brake hiss (filtered noise + high squeak, one-shot) ----
+// brakeTick() is called every frame while the brake input is held;
+// the 0.7 s cooldown means a long brake gives a periodic hiss, never
+// a stack of overlapping bursts. Only fires while actually moving
+// (speedKmh >= 10), so stationary pedal presses stay silent.
+let brakeLast = -1;
+export function brakeTick(speedKmh) {
+  if (!ensure()) return false;
+  if (speedKmh < 10) return false;
+  const now = ctx.currentTime;
+  if (now - brakeLast < 0.7) return false;
+  brakeLast = now;
+  const t = now;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.35);
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 1.0;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.10, t + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.35);
+  const sq = ctx.createOscillator(); sq.type = 'sine'; sq.frequency.value = 2400;
+  const sg = ctx.createGain();
+  sg.gain.setValueAtTime(0.0001, t);
+  sg.gain.exponentialRampToValueAtTime(0.035, t + 0.04);
+  sg.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  sq.connect(sg).connect(master); sq.start(t); sq.stop(t + 0.3);
+  const done = (() => {
+    let cleaned = false;
+    return () => {
+      if (cleaned) return; cleaned = true;
+      try { src.disconnect(); f.disconnect(); g.disconnect(); } catch {}
+      try { sq.disconnect(); sg.disconnect(); } catch {}
+    };
+  })();
+  src.onended = done; sq.onended = done;
+  return true;
+}
+
+// ---- horn (dual-tone, held while the key is down) ----
+// Two detuned sawtooths through a lowpass — the classic car-horn
+// interval. The pair is tuned per vehicle family (truck low, sports
+// high) so the horn itself identifies the car. hornStart is a no-op
+// while a horn is already sounding (key repeat can't stack it), and a
+// 2.5 s safety timer stops it even if keyup is missed.
+const HORN_PROFILES = {
+  car:    { f1: 370, f2: 466, gain: 0.12 },
+  muscle: { f1: 330, f2: 415, gain: 0.13 },
+  truck:  { f1: 220, f2: 277, gain: 0.16 },
+  sports: { f1: 440, f2: 554, gain: 0.12 },
+};
+let hornNodes = null; // { o1, o2, f, g, timer }
+export function hornStart(type) {
+  if (!ensure() || hornNodes) return false;
+  const P = HORN_PROFILES[profileFor(type)] || HORN_PROFILES.car;
+  const t = ctx.currentTime;
+  const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = P.f1;
+  const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = P.f2;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1200;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(P.gain, t + 0.03);
+  o1.connect(f); o2.connect(f); f.connect(g).connect(master);
+  o1.start(t); o2.start(t);
+  const timer = setTimeout(() => hornStop(), 2500);
+  hornNodes = { o1, o2, f, g, timer };
+  return true;
+}
+export function hornStop() {
+  if (!hornNodes) return;
+  const h = hornNodes; hornNodes = null;
+  clearTimeout(h.timer);
+  if (ctx && h.g) h.g.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+  setTimeout(() => {
+    try { h.o1.stop(); h.o2.stop(); } catch {}
+    try { h.g.disconnect(); h.f.disconnect(); } catch {}
+  }, 150);
+}
+
+// ---- tire squeal (looped filtered noise, one shared voice) ----
+// squealSet(intensity) is called every driving frame: 0 = no squeal,
+// up to 1 = full slide. The voice is created lazily on the first
+// squeal and faded out + stopped when the car stops sliding, so it
+// can never stack or drone on when not drifting. A slow LFO wobbles
+// the bandpass frequencies so the screech shimmers instead of
+// sitting on one flat tone.
+let squealNodes = null; // { src, f1, f2, g, lfo, lfoGain, stopTimer }
+export function squealSet(intensity) {
+  if (!ensure()) return;
+  intensity = Math.max(0, Math.min(1, intensity || 0));
+  if (intensity <= 0) {
+    if (squealNodes) {
+      const s = squealNodes; squealNodes = null;
+      if (s.g) s.g.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+      clearTimeout(s.stopTimer);
+      s.stopTimer = setTimeout(() => {
+        try { s.src.stop(); s.lfo.stop(); } catch {}
+        try { s.g.disconnect(); s.f1.disconnect(); s.f2.disconnect(); s.lfoGain.disconnect(); } catch {}
+      }, 350);
+    }
+    return;
+  }
+  if (!squealNodes) {
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(1); src.loop = true;
+    const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 1100; f1.Q.value = 2.5;
+    const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1650; f2.Q.value = 2.5;
+    const g = ctx.createGain(); g.gain.value = 0.0001;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 7;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 150;
+    lfo.connect(lfoGain); lfoGain.connect(f1.frequency); lfoGain.connect(f2.frequency);
+    src.connect(f1).connect(g); src.connect(f2).connect(g); g.connect(master);
+    src.start(); lfo.start();
+    squealNodes = { src, f1, f2, g, lfo, lfoGain, stopTimer: null };
+  }
+  const s = squealNodes;
+  clearTimeout(s.stopTimer); s.stopTimer = null;
+  s.g.gain.setTargetAtTime(0.09 * intensity, ctx.currentTime, 0.1);
+}
+// ---- distant traffic engines (heard from outside) ----
+// A small pool (max 3) of quiet engine voices follows the nearest
+// traffic cars. Each voice uses the car's own profile, with gain by
+// distance and pitch by the car's speed. Reassignment is driven by
+// main.js every 0.5 s; voices for cars that left the set fade out and
+// stop, so the pool can never grow or stack. Traffic voices are NOT
+// restored by resumePausedAudio — the next trafficUpdate (<= 0.5 s
+// after resume) recreates exactly the ones still nearby.
+const TRAFFIC_MAX = 3, TRAFFIC_RANGE = 40;
+let trafficVoices = []; // { id, profile, osc1, osc2, g2, filter, gain }
+export function trafficUpdate(cars) {
+  if (!ensure() || paused) return;
+  const keep = new Set();
+  for (const c of (cars || []).slice(0, TRAFFIC_MAX)) {
+    keep.add(c.id);
+    const prof = profileFor(c.kind);
+    const P = ENGINE_PROFILES[prof];
+    const t = ctx.currentTime;
+    const speedKmh = c.speedKmh || 0;
+    const f1 = P.base + speedKmh * P.slope;
+    // gain: 0 at the range edge, up to 0.03 up close
+    const target = 0.03 * Math.max(0, 1 - (c.dist || TRAFFIC_RANGE) / TRAFFIC_RANGE);
+    let v = trafficVoices.find((x) => x.id === c.id);
+    if (!v) {
+      const osc1 = ctx.createOscillator(); osc1.type = P.wave; osc1.frequency.value = f1;
+      const osc2 = ctx.createOscillator(); osc2.type = P.wave2; osc2.frequency.value = f1 * P.oct2 + P.detune2;
+      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = P.filterBase + speedKmh * P.filterSlope;
+      const g2 = ctx.createGain(); g2.gain.value = P.gain2;
+      const gain = ctx.createGain(); gain.gain.value = 0.0001;
+      osc1.connect(filter); osc2.connect(g2).connect(filter); filter.connect(gain).connect(master);
+      osc1.start(); osc2.start();
+      v = { id: c.id, profile: prof, osc1, osc2, g2, filter, gain };
+      trafficVoices.push(v);
+    } else if (v.profile !== prof) {
+      v.profile = prof;
+      v.osc1.type = P.wave; v.osc2.type = P.wave2; v.g2.gain.value = P.gain2;
+    }
+    v.osc1.frequency.setTargetAtTime(f1, t, 0.15);
+    v.osc2.frequency.setTargetAtTime(f1 * P.oct2 + P.detune2, t, 0.15);
+    v.filter.frequency.setTargetAtTime(P.filterBase + speedKmh * P.filterSlope, t, 0.15);
+    v.gain.gain.setTargetAtTime(target, t, 0.2);
+  }
+  // fade out + stop voices whose car left the set
+  trafficVoices = trafficVoices.filter((v) => {
+    if (keep.has(v.id)) return true;
+    if (v.gain) v.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+    setTimeout(() => {
+      try { v.osc1.stop(); v.osc2.stop(); } catch {}
+      try { v.gain.disconnect(); v.g2.disconnect(); v.filter.disconnect(); } catch {}
+    }, 300);
+    return false;
+  });
+}
+function trafficStopAll() {
+  for (const v of trafficVoices) {
+    try { v.osc1.stop(); v.osc2.stop(); } catch {}
+    try { v.gain.disconnect(); v.g2.disconnect(); v.filter.disconnect(); } catch {}
+  }
+  trafficVoices = [];
+}
+
 // ---- UI blip + cash chime ----
 export function blip(freq = 880) {
   if (!ensure()) return;
@@ -307,14 +529,21 @@ export function pauseAudio() {
     radio: !!radioTimer,
     station: radioStation,
     amb: !!ambNodes,
+    horn: !!hornNodes,
+    squeal: !!squealNodes,
+    traffic: trafficVoices.length > 0,
   };
   const t = ctx.currentTime;
   if (engineGain) engineGain.gain.setTargetAtTime(0, t, 0.05);
   if (sirenGain) sirenGain.gain.setTargetAtTime(0, t, 0.05);
   if (ambNodes && ambNodes.g) ambNodes.g.gain.setTargetAtTime(0, t, 0.05);
+  if (squealNodes && squealNodes.g) squealNodes.g.gain.setTargetAtTime(0, t, 0.05);
+  for (const v of trafficVoices) if (v.gain) v.gain.gain.setTargetAtTime(0, t, 0.05);
+  hornStop(); // fades its own gain, stops after 150 ms
+  squealSet(0); // fades out, stops after 350 ms
   radioStop();
   clearTimeout(stopTimer);
-  stopTimer = setTimeout(() => { stopTimer = null; engineStop(); sirenStop(); ambienceStop(); }, 200);
+  stopTimer = setTimeout(() => { stopTimer = null; engineStop(); sirenStop(); ambienceStop(); trafficStopAll(); }, 200);
 }
 export function resumePausedAudio(want = {}) {
   if (!ctx) return;
@@ -329,8 +558,13 @@ export function resumePausedAudio(want = {}) {
   const station = want.station !== undefined ? want.station : (snap.station ?? 0);
   // engine: recreate only if driving (the driving loop's engineSet ramps
   // the gain back up); if not driving, leave it stopped — entering a car
-  // recreates it via engineStart()
-  if (driving) { if (!engineOsc) engineStart(); }
+  // recreates it via engineStart(). engineStart(type) rebuilds the voice
+  // when the driven car's type changed, and is a no-op when it matches.
+  // Horn / squeal / traffic are NOT restored here: the horn is a
+  // momentary key-held sound (re-press J), while squeal and traffic
+  // come back from the game's per-frame calls (squealSet / trafficUpdate)
+  // within a frame / 0.5 s of resume if their conditions still hold.
+  if (driving) { engineStart(want.type); }
   else if (engineOsc) engineStop();
   // siren: recreate only if wanted; if the osc survived the pause (stop
   // was cancelled), ramp its gain back instead of duplicating it

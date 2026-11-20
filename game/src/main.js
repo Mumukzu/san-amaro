@@ -623,6 +623,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (state.mode !== 'play') return;
   if (e.code === 'KeyE') tryEnterExitCar();
+  // AUDIO-03: horn (hold J while driving; pitch matches the car)
+  if (e.code === 'KeyJ' && state.driving) Audio.hornStart(state.carId);
   if (e.code.startsWith('Digit')) {
     const n = parseInt(e.code.slice(5), 10);
     if (n >= 1 && n <= 5) {
@@ -649,7 +651,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG' && nearGarage()) garageArmor();
   if (e.code === 'KeyH' && nearGarage()) garageAmmo();
 });
-window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+window.addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'KeyJ') Audio.hornStop(); });
 window.addEventListener('mousedown', () => {
   mouseDown = true;
   Audio.initAudio(); Audio.resumeAudio();
@@ -842,7 +844,7 @@ function resumeGame() {
   state.mode = 'play';
   // restore only the audio that should be live now (radio at its last
   // station, siren only if wanted, engine only if driving)
-  Audio.resumePausedAudio({ driving: state.driving, wanted: state.wanted, station: state.radio });
+  Audio.resumePausedAudio({ driving: state.driving, wanted: state.wanted, station: state.radio, type: state.carId });
 }
 function populatePauseMenu() {
   const target = state.driving && state.car ? state.car.group.position : jay.group.position;
@@ -1035,6 +1037,7 @@ function tryEnterExitCar() {
     jay.group.rotation.y = c.group.rotation.y;
     state.car = null; state.speed = 0;
     Audio.engineFadeOut();
+    Audio.hornStop(); Audio.squealSet(0);
     Audio.blip(420);
     return;
   }
@@ -1060,7 +1063,7 @@ function tryEnterExitCar() {
     if (d < 4.5) {
       state.driving = true; state.car = car; state.carId = id;
       jay.group.visible = false;
-      Audio.engineStart();
+      Audio.engineStart(id); // AUDIO-03: rebuild the engine voice for this car type
       Audio.blip(520);
       // stealing a car is a crime — wanted 1, or 3 for the prize Comet
       setWanted(id === 'prize' ? 3 : 1);
@@ -1269,6 +1272,7 @@ let lastT = performance.now();
 let shotFrames = 0;
 let walkPhase = 0;
 let minimapTimer = 0;
+let trafficAudioT = 0; // AUDIO-03: throttle for the traffic-engine pool (2 Hz)
 let missionHudT = 0; // throttle for the mission-timer HUD refresh (2 Hz)
 let hpShown = 100; // last HP value written to the HUD (regen throttle)
 let garageToastShown = false; // garage hint shown once per visit
@@ -1328,6 +1332,18 @@ function updatePlayer(dt) {
     car.group.userData.wheels[0].rotation.y = strafe * 0.32;
     car.group.userData.wheels[1].rotation.y = strafe * 0.32;
     Audio.engineSet(Math.abs(state.speed) * 3.6, true);
+    // AUDIO-03: brake hiss + tire squeal (sound only — physics untouched).
+    // Braking = S while moving forward, or Space (handbrake) at speed.
+    // Squeal = handbrake at speed, or hard steering at speed.
+    const speedAbs = Math.abs(state.speed);
+    const braking = ((keys['KeyS'] || keys['ArrowDown']) && state.speed > 2) || (keys['Space'] && speedAbs > 2);
+    if (braking) Audio.brakeTick(speedAbs * 3.6);
+    let squeal = 0;
+    if (speedAbs > 6) {
+      if (keys['Space']) squeal = 0.85;
+      else if (strafe !== 0 && speedAbs > 10) squeal = Math.min(1, 0.4 + (speedAbs - 10) / 15);
+    }
+    Audio.squealSet(squeal);
     HUD.setVehicle({ speed: Math.round(Math.abs(state.speed) * 3.6), nitro: Math.round(state.nitro) });
     // mission progress (drive / pickup arrival, race gates) is handled by
     // tickMission in the main loop — it works driving or on foot.
@@ -1350,7 +1366,24 @@ function updatePlayer(dt) {
       idleCycle(jay, state.time);
     }
     Audio.engineSet(0, false);
+    Audio.squealSet(0); // AUDIO-03: no squeal on foot (covers exiting mid-drift)
   }
+}
+
+// AUDIO-03: pick the nearest traffic cars for the distant-engine pool
+// (nearest 3 within 40 m). Runs at 2 Hz from animate(); the audio side
+// owns voice creation, fading and cleanup.
+function updateTrafficAudio() {
+  if (state.mode !== 'play') return;
+  const p = state.driving && state.car ? state.car.group.position : jay.group.position;
+  const near = [];
+  for (let i = 0; i < traffic.cars.length; i++) {
+    const c = traffic.cars[i];
+    const d = c.group.position.distanceTo(p);
+    if (d < 40) near.push({ id: i, kind: c.group.userData.spec?.kind || 'Sedan', speedKmh: Math.abs(c.speed) * 3.6, dist: d });
+  }
+  near.sort((a, b) => a.dist - b.dist);
+  Audio.trafficUpdate(near.slice(0, 3));
 }
 
 // ---------- police (cruisers + heli + roadblocks) ----------
@@ -1817,6 +1850,9 @@ function animate() {
   if (state.mode === 'play' || SHOT) {
     if (!SHOT) updatePlayer(dt);
     traffic.update(dt);
+    // AUDIO-03: distant traffic engines (nearest 3 within 40 m), 2 Hz
+    trafficAudioT += dt;
+    if (trafficAudioT > 0.5) { trafficAudioT = 0; updateTrafficAudio(); }
     pedestrians.update(dt);
     if (!SHOT) idleCycle(plazaOfficer, state.time);
     // staged pedestrians / mid actors idle-sway (only in shot mode)
