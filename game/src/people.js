@@ -559,6 +559,7 @@ export function makePedestrians(scene, count = 60, layout = null) {
     walkers.push({
       p, alongZ, street, side, dir, pos,
       speed: 1.1 + (i % 4) * 0.25, phase: (i * 1.7) % (Math.PI * 2),
+      lastStep: Math.floor(((i * 1.7) % (Math.PI * 2)) / Math.PI), // AUDIO-04: footstep phase tracking
       fleeing: false, downT: 0,
     });
   }
@@ -574,7 +575,7 @@ export function makePedestrians(scene, count = 60, layout = null) {
       w.p.group.position.y = 0.3;
       return true;
     },
-    update(dt) {
+    update(dt, onStep) {
       for (const w of walkers) {
         // down: count down, stay put; get up and flee when the timer ends
         if (w.downT > 0) {
@@ -595,6 +596,13 @@ export function makePedestrians(scene, count = 60, layout = null) {
         else w.p.group.position.z = w.pos;
         w.phase += dt * sp * 2.4;
         walkCycle(w.p, w.phase, sp, w.fleeing);
+        // AUDIO-04: footstep on each half-cycle (phase crossing a multiple
+        // of PI) — tempo follows the walk animation; fleeing = running.
+        // onStep(w, running) is optional and supplied by the caller.
+        if (onStep) {
+          const s = Math.floor(w.phase / Math.PI);
+          if (s !== w.lastStep) { w.lastStep = s; onStep(w, w.fleeing); }
+        }
         // fleeing pedestrians glance back (torso twist)
         w.p.torso.rotation.y = w.fleeing ? 0.5 : 0;
         w.p.head.rotation.y = w.fleeing ? 0.6 : 0;

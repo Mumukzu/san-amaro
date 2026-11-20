@@ -455,6 +455,166 @@ function trafficStopAll() {
   trafficVoices = [];
 }
 
+// ---- character sounds (AUDIO-04) ----
+// All one-shots through master (mute respected). No loops, so pause /
+// resume need nothing added: a step or punch in flight finishes in
+// < 0.3 s, exactly like the existing blip / gunshot / crash one-shots,
+// and no new step can start while paused (the walk cycles that drive
+// them only advance while state.mode === 'play').
+// Footsteps are driven by the EXISTING walk-cycle phase: one step per
+// half-cycle (phase crossing a multiple of PI), so tempo follows the
+// animation exactly — walk and run differ because the phase advances
+// faster when running. Each step varies gain/filter slightly and
+// alternates left/right foot, so it never sounds mechanical.
+// Police + enemy profiles exist in the table for when their events
+// exist; right now no police officer walks/runs in the game (they
+// stand/idle) and no enemy walks (they stand and shoot), so nothing
+// calls footstep() with those kinds yet.
+const STEP_PROFILES = {
+  jay:    { filter: 520, gainWalk: 0.10,  gainRun: 0.15,  dur: 0.09, thumpF: 95 },
+  npc:    { filter: 420, gainWalk: 0.055, gainRun: 0.09,  dur: 0.08, thumpF: 85 },
+  police: { filter: 600, gainWalk: 0.11,  gainRun: 0.16,  dur: 0.09, thumpF: 100 },
+  enemy:  { filter: 480, gainWalk: 0.09,  gainRun: 0.14,  dur: 0.09, thumpF: 90 },
+};
+let stepLast = -1; // global safety throttle: two callers in one frame can't stack
+let stepAlt = 0;   // alternates left/right foot
+function cleanOneShot(nodes) {
+  // nodes: [src, ...] — disconnect each on the first onended that fires
+  let cleaned = false;
+  return () => {
+    if (cleaned) return; cleaned = true;
+    for (const n of nodes) { try { n.disconnect(); } catch {} }
+  };
+}
+export function footstep(kind = 'jay', running = false) {
+  if (!ensure()) return false;
+  const now = ctx.currentTime;
+  if (now - stepLast < 0.05) return false; // never stack steps
+  stepLast = now;
+  const P = STEP_PROFILES[kind] || STEP_PROFILES.jay;
+  const t = now;
+  stepAlt ^= 1;
+  const varF = 0.9 + Math.random() * 0.2;  // +-10% filter variation
+  const varG = 0.85 + Math.random() * 0.3; // +-15% gain variation
+  const altF = stepAlt ? 1.06 : 0.94;       // left/right foot slightly different
+  const peak = (running ? P.gainRun : P.gainWalk) * varG;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.12);
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = P.filter * varF * altF;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + P.dur);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + P.dur + 0.05);
+  const th = ctx.createOscillator(); th.type = 'sine';
+  th.frequency.setValueAtTime(P.thumpF * altF, t);
+  th.frequency.exponentialRampToValueAtTime(40, t + P.dur * 0.7);
+  const tg = ctx.createGain();
+  tg.gain.setValueAtTime(0.0001, t);
+  tg.gain.exponentialRampToValueAtTime(peak * 0.6, t + 0.006);
+  tg.gain.exponentialRampToValueAtTime(0.001, t + P.dur);
+  th.connect(tg).connect(master); th.start(t); th.stop(t + P.dur + 0.05);
+  const done = cleanOneShot([src, f, g, th, tg]);
+  src.onended = done; th.onended = done;
+  return true;
+}
+// Punch landing: impact snap (bandpass noise) + body thump (low sine).
+export function punchHit() {
+  if (!ensure()) return false;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.15);
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 320; f.Q.value = 1.2;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.28, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.16);
+  const th = ctx.createOscillator(); th.type = 'sine';
+  th.frequency.setValueAtTime(110, t); th.frequency.exponentialRampToValueAtTime(45, t + 0.1);
+  const tg = ctx.createGain();
+  tg.gain.setValueAtTime(0.0001, t);
+  tg.gain.exponentialRampToValueAtTime(0.30, t + 0.007);
+  tg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  th.connect(tg).connect(master); th.start(t); th.stop(t + 0.19);
+  const done = cleanOneShot([src, f, g, th, tg]);
+  src.onended = done; th.onended = done;
+  return true;
+}
+// Punch missing: a short whoosh (noise sweeping down), no impact.
+export function punchMiss() {
+  if (!ensure()) return false;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.25);
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.5;
+  f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(280, t + 0.16);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.09, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.23);
+  src.onended = cleanOneShot([src, f, g]);
+  return true;
+}
+// Body impact on Jay (enemy bullet connects): dull, heavier than a punch.
+export function bodyImpact() {
+  if (!ensure()) return false;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.18);
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 260;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.20, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.2);
+  const th = ctx.createOscillator(); th.type = 'sine';
+  th.frequency.setValueAtTime(75, t); th.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+  const tg = ctx.createGain();
+  tg.gain.setValueAtTime(0.0001, t);
+  tg.gain.exponentialRampToValueAtTime(0.22, t + 0.007);
+  tg.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+  th.connect(tg).connect(master); th.start(t); th.stop(t + 0.21);
+  const done = cleanOneShot([src, f, g, th, tg]);
+  src.onended = done; th.onended = done;
+  return true;
+}
+// Body hitting the ground (enemy killed, pedestrian knocked down).
+export function fallThud() {
+  if (!ensure()) return false;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.3);
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 180;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.30, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + 0.3);
+  const th = ctx.createOscillator(); th.type = 'sine';
+  th.frequency.setValueAtTime(65, t); th.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+  const tg = ctx.createGain();
+  tg.gain.setValueAtTime(0.0001, t);
+  tg.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
+  tg.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  th.connect(tg).connect(master); th.start(t); th.stop(t + 0.3);
+  const done = cleanOneShot([src, f, g, th, tg]);
+  src.onended = done; th.onended = done;
+  return true;
+}
+// Picking up an item / clue / envelope: two-note chime (was a generic blip).
+export function interactSound() {
+  if (!ensure()) return false;
+  const t = ctx.currentTime;
+  [880, 1318.5].forEach((fr, i) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = fr;
+    const g = ctx.createGain();
+    const t0 = t + i * 0.09;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0 + 0.14);
+    o.onended = cleanOneShot([o, g]);
+  });
+  return true;
+}
+
 // ---- UI blip + cash chime ----
 export function blip(freq = 880) {
   if (!ensure()) return;

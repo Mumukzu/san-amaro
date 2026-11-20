@@ -1046,7 +1046,7 @@ function tryEnterExitCar() {
   if (s && s.type === 'interact' && s.marker) {
     const d = Math.hypot(jay.group.position.x - s.marker.x, jay.group.position.z - s.marker.z);
     if (d < s.marker.r) {
-      Audio.blip(880);
+      Audio.interactSound(); // AUDIO-04: pickup chime (was generic blip 880)
       advanceStage();
       return;
     }
@@ -1190,8 +1190,8 @@ function fireWeapon() {
   if (state.weapon === 0) {
     state.fireCd = w.cd;
     const t = findTarget(w.range);
-    if (t) hitTarget(t, w.dmg);
-    else Audio.blip(300);
+    if (t) { hitTarget(t, w.dmg); Audio.punchHit(); } // AUDIO-04: punch lands
+    else Audio.punchMiss(); // AUDIO-04: punch whiffs (was generic blip 300)
     return;
   }
   const a = state.ammo[state.weapon];
@@ -1233,6 +1233,7 @@ function hitTarget(t, dmg) {
       addXP(40);
       addMoney(50);
       Audio.blip(1200);
+      Audio.fallThud(); // AUDIO-04: body hitting the ground
       // shootout stage: all enemies down?
       const s = currentStage();
       if (s && s.type === 'shootout' && enemies.every((x) => !x.alive)) advanceStage();
@@ -1243,6 +1244,7 @@ function hitTarget(t, dmg) {
     t.p.group.position.y = 0.3;
     addXP(40);
     Audio.blip(1200);
+    Audio.fallThud(); // AUDIO-04: body hitting the ground
   }
 }
 // Enemies shoot back: each alive enemy fires at Jay every ~2.5 s when he
@@ -1261,7 +1263,7 @@ function updateEnemies(dt) {
     const dir = new THREE.Vector3().subVectors(jayPos, from).normalize();
     spawnTracer(from, dir, Math.max(1, d), 0xff9a8a);
     Audio.gunshot();
-    if (Math.random() < 0.4) damagePlayer(8);
+    if (Math.random() < 0.4) { damagePlayer(8); Audio.bodyImpact(); } // AUDIO-04: bullet connects with Jay
   }
 }
 function $(id) { return document.getElementById(id); }
@@ -1271,6 +1273,7 @@ function $(id) { return document.getElementById(id); }
 let lastT = performance.now();
 let shotFrames = 0;
 let walkPhase = 0;
+let lastJayStep = 0; // AUDIO-04: Jay footstep phase tracking (multiples of PI)
 let minimapTimer = 0;
 let trafficAudioT = 0; // AUDIO-03: throttle for the traffic-engine pool (2 Hz)
 let missionHudT = 0; // throttle for the mission-timer HUD refresh (2 Hz)
@@ -1360,6 +1363,11 @@ function updatePlayer(dt) {
       jay.group.position.z = clamp(jay.group.position.z, -295, 295);
       walkPhase += dt * sp * 2.2;
       walkCycle(jay, walkPhase, sp, sp > 5);
+      // AUDIO-04: Jay footsteps — one per half walk-cycle (phase crossing
+      // a multiple of PI), so tempo follows the animation exactly; walk
+      // (sp 4) and run (sp 7) differ. Only while moving on foot.
+      const stepIdx = Math.floor(walkPhase / Math.PI);
+      if (stepIdx !== lastJayStep) { lastJayStep = stepIdx; Audio.footstep('jay', sp > 5); }
       // turn Jay with A/D when not strafing? keep heading fixed; camera follows.
       if (strafe !== 0 && fwd === 0) jay.group.rotation.y += strafe * 1.6 * dt;
     } else {
@@ -1708,6 +1716,7 @@ function collideCarPedestrians(dt) {
     const d = Math.hypot(p.x - wp.x, p.z - wp.z);
     if (d < 2.4) {
       pedestrians.knockDown(w);
+      Audio.fallThud(); // AUDIO-04: pedestrian knocked down (was silent)
       if (state.wanted < 5) setWanted(state.wanted + 1);
       HUD.showToast('HIT AND RUN', 'A pedestrian is down — the SAMPD noticed.', 2500);
       state.speed *= 0.7;
@@ -1842,6 +1851,16 @@ function updateDistrict() {
   HUD.setDistrict(zone, bestD < 14 ? best : 'San Amaro');
 }
 
+// AUDIO-04: NPC footsteps — only for walkers near the player (25 m),
+// so a distant crowd stays silent. Called by pedestrians.update() on
+// each walker's half-cycle; the audio side throttles overlapping steps.
+function npcStep(w, running) {
+  if (state.mode !== 'play') return;
+  const p = state.driving && state.car ? state.car.group.position : jay.group.position;
+  if (w.p.group.position.distanceTo(p) > 25) return;
+  Audio.footstep('npc', running);
+}
+
 function animate() {
   const now = performance.now();
   const dt = Math.min((now - lastT) / 1000, 0.05);
@@ -1853,7 +1872,7 @@ function animate() {
     // AUDIO-03: distant traffic engines (nearest 3 within 40 m), 2 Hz
     trafficAudioT += dt;
     if (trafficAudioT > 0.5) { trafficAudioT = 0; updateTrafficAudio(); }
-    pedestrians.update(dt);
+    pedestrians.update(dt, npcStep);
     if (!SHOT) idleCycle(plazaOfficer, state.time);
     // staged pedestrians / mid actors idle-sway (only in shot mode)
     if (SHOT) {
