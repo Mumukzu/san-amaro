@@ -710,6 +710,7 @@ function startGame(continued) {
         u.group.visible = true;
         u.group.position.set(p.x + (i % 2 ? 30 : -30), 0, p.z + (i < 2 ? -30 : 30));
       });
+      Audio.sirenStart(); // the save kept the wanted level: the pursuit (and its siren) is still live
     }
   }
   // (re-)enter the current stage so its marker / enemies / person are live
@@ -948,7 +949,7 @@ function setWanted(n) {
   state.wanted = clamp(n, 0, 5);
   refreshStatsHUD();
   if (state.wanted > 0) { Audio.sirenStart(); pedestrians.setFleeing(true); }
-  else { Audio.sirenStop(); pedestrians.setFleeing(false); }
+  else { Audio.sirenFadeOut(); Audio.policeRadioStop(); pedestrians.setFleeing(false); }
   return state.wanted;
 }
 // (Re)enter the current stage: marker, dialogue, stage-specific setup.
@@ -1917,6 +1918,7 @@ function animate() {
     markerMesh.visible = !!currentMarker() && !state.mission.done && state.mode === 'play';
     if (markerMesh.userData.beam) markerMesh.userData.beam.visible = markerMesh.visible;
     Audio.sirenUpdate(dt);
+    Audio.policeRadioUpdate(dt, state.wanted);
     minimapTimer += dt;
     if (minimapTimer > 0.12) { minimapTimer = 0; updateMinimap(); updateDistrict(); }
   }

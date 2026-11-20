@@ -183,15 +183,27 @@ export function ambienceStop() {
 }
 
 // ---- siren (square wave alternating 720 / 940 Hz) ----
+// One voice only: sirenStart() is a no-op while a siren is already live,
+// so overlapping cruisers can never stack sirens. sirenFadeOut() is the
+// pursuit-end stop: it fades the gain out first, then stops the voice,
+// so the siren never cuts dead mid-wail. If wanted comes back during
+// the fade, sirenStart() cancels the pending stop and ramps the gain
+// back up instead of building a second voice.
+let sirenFadeTimer = null;
 export function sirenStart() {
-  if (!ensure() || sirenOsc) return;
+  if (!ensure()) return;
+  if (sirenOsc) {
+    // a fade-out was in progress: cancel it, bring the gain back
+    clearTimeout(sirenFadeTimer); sirenFadeTimer = null;
+    if (sirenGain) sirenGain.gain.setTargetAtTime(0.035, ctx.currentTime, 0.08);
+    return;
+  }
   sirenOsc = ctx.createOscillator();
   sirenOsc.type = 'square'; sirenOsc.frequency.value = 720;
   sirenGain = ctx.createGain(); sirenGain.gain.value = 0.035;
-  sirenOsc.connect(sireneGainSafe()).connect(master);
+  sirenOsc.connect(sirenGain).connect(master);
   sirenOsc.start();
 }
-function sireneGainSafe() { return sirenGain; }
 export function sirenUpdate(dt) {
   if (!sirenOsc) return;
   sirenTimer += dt;
@@ -200,9 +212,152 @@ export function sirenUpdate(dt) {
     sirenOsc.frequency.value = sirenHi ? 940 : 720;
   }
 }
+export function sirenFadeOut() {
+  if (!sirenOsc || !ctx) return;
+  if (sirenGain) sirenGain.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
+  clearTimeout(sirenFadeTimer);
+  sirenFadeTimer = setTimeout(() => { sirenFadeTimer = null; sirenStop(); }, 200);
+}
 export function sirenStop() {
+  clearTimeout(sirenFadeTimer); sirenFadeTimer = null;
   if (sirenOsc) { try { sirenOsc.stop(); } catch {} sirenOsc = null; }
   if (sirenGain) { try { sirenGain.disconnect(); } catch {} sirenGain = null; }
+}
+
+// ---- police radio chatter (AUDIO-05) ----
+// Procedural dispatch radio, heard only while the police are pursuing
+// (wanted > 0). Each transmission is: a short static squelch burst, a
+// burst of synthetic voice blips (square-wave syllables at radio
+// frequencies — garbled chatter, NOT a recording and NOT speech), then
+// a closing squelch burst. Four patterns (short / medium / long /
+// double) are picked at random and never repeat twice in a row, so the
+// chatter doesn't sound looped. Transmissions are spaced by wanted:
+// low heat = occasional, high heat = frequent, with jitter so the
+// rhythm never sounds mechanical. The scheduler is frame-driven
+// (policeRadioUpdate, called from the animate loop next to
+// sirenUpdate) and stops itself the moment wanted hits 0 — nothing
+// keeps transmitting after the pursuit ends. All nodes run through one
+// per-transmission gain into master (mute respected), and every node
+// disconnects on ended, so repeated transmissions can't accumulate.
+const RADIO_PATTERNS = [
+  // short: 3 blips
+  { blips: [[520, 0.07], [440, 0.06], [610, 0.08]], gaps: [0.04, 0.05] },
+  // medium: 5 blips
+  { blips: [[480, 0.06], [620, 0.07], [380, 0.05], [540, 0.08], [460, 0.06]], gaps: [0.03, 0.05, 0.04, 0.03] },
+  // long: 8 blips in two groups of 4
+  { blips: [[560, 0.06], [420, 0.05], [680, 0.07], [500, 0.06], [440, 0.06], [600, 0.05], [380, 0.07], [520, 0.08]], gaps: [0.03, 0.04, 0.03, 0.18, 0.04, 0.03, 0.05] },
+  // double: 2 blips, pause, 3 blips (call + response feel)
+  { blips: [[640, 0.07], [480, 0.06], [560, 0.06], [420, 0.07], [660, 0.08]], gaps: [0.04, 0.22, 0.05, 0.04] },
+];
+const RADIO_INTERVAL = { 1: 14, 2: 9, 3: 6, 4: 4.5, 5: 3.5 }; // game-seconds between transmissions
+const RADIO_COOLDOWN = 2.0; // minimum game-seconds between transmission starts
+const RADIO_STATIC_DUR = 0.12;
+let radioTx = null; // in-flight transmission { gain } or null
+let radioGameT = 0; // scheduler clock (game seconds, advanced by policeRadioUpdate)
+let radioTxLastGame = -10;
+let dispatchTimer = 0; // scheduler accumulator (game seconds)
+let dispatchNextIn = RADIO_INTERVAL[1];
+let radioLastPattern = -1;
+let radioLastWanted = 0;
+
+function radioIntervalFor(wanted) {
+  const base = RADIO_INTERVAL[Math.max(1, Math.min(5, wanted || 1))] || RADIO_INTERVAL[1];
+  return base * (0.75 + Math.random() * 0.5); // +-25% jitter
+}
+// One transmission: static squelch in, voice blips, static squelch out.
+// pattern: optional 0-3 to force a pattern (tests); otherwise random,
+// never the same pattern twice in a row. Returns true when a
+// transmission started, false when one is already in flight.
+export function policeRadioTransmit(pattern) {
+  if (!ensure() || paused) return false;
+  if (radioTx) return false; // one transmission at a time, never overlap
+  let p = pattern;
+  if (p === undefined || p === null || p < 0 || p >= RADIO_PATTERNS.length) {
+    do { p = Math.floor(Math.random() * RADIO_PATTERNS.length); } while (p === radioLastPattern);
+  }
+  radioLastPattern = p;
+  const P = RADIO_PATTERNS[p];
+  const t = ctx.currentTime;
+  const nodes = [];
+  // one gain for the whole transmission: policeRadioStop() fades it out,
+  // and it disconnects itself when the last node ends
+  const txGain = ctx.createGain(); txGain.gain.value = 1;
+  txGain.connect(master);
+  nodes.push(txGain);
+  let cursor = t;
+  const staticBurst = (start) => {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.2);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.05, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, start + RADIO_STATIC_DUR);
+    src.connect(f).connect(g).connect(txGain);
+    src.start(start); src.stop(start + RADIO_STATIC_DUR + 0.05);
+    nodes.push(src, f, g);
+    return src;
+  };
+  staticBurst(cursor); // opening squelch
+  cursor += RADIO_STATIC_DUR;
+  P.blips.forEach(([freq, dur], i) => {
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.value = freq * (0.95 + Math.random() * 0.1); // +-5% jitter
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, cursor);
+    g.gain.exponentialRampToValueAtTime(0.07, cursor + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, cursor + dur);
+    o.connect(g).connect(txGain);
+    o.start(cursor); o.stop(cursor + dur + 0.02);
+    nodes.push(o, g);
+    cursor += dur + (P.gaps[i] || 0);
+  });
+  const lastSrc = staticBurst(cursor);
+  const done = (() => {
+    let cleaned = false;
+    return () => {
+      if (cleaned) return; cleaned = true;
+      for (const n of nodes) { try { n.disconnect(); } catch {} }
+      if (radioTx && radioTx.gain === txGain) radioTx = null;
+    };
+  })();
+  // the closing static is the last node to end, so it alone triggers
+  // cleanup — disconnecting on an earlier onended would cut the voice
+  // blips off mid-transmission
+  lastSrc.onended = done;
+  radioTx = { gain: txGain };
+  return true;
+}
+// Frame scheduler: call every play frame with the current wanted level.
+// wanted 0 = silence (any in-flight transmission fades out); wanted > 0
+// = a transmission every radioIntervalFor(wanted) game-seconds, never
+// more often than RADIO_COOLDOWN.
+export function policeRadioUpdate(dt, wanted) {
+  if (!ensure() || paused) return;
+  radioGameT += dt;
+  if (!wanted || wanted <= 0) { policeRadioStop(); return; }
+  if (wanted !== radioLastWanted) {
+    radioLastWanted = wanted;
+    dispatchTimer = 0;
+    dispatchNextIn = radioIntervalFor(wanted);
+  }
+  if (radioTx) return; // a transmission is in flight; wait for it
+  dispatchTimer += dt;
+  if (dispatchTimer >= dispatchNextIn && radioGameT - radioTxLastGame >= RADIO_COOLDOWN) {
+    if (policeRadioTransmit()) {
+      dispatchTimer = 0;
+      radioTxLastGame = radioGameT;
+      dispatchNextIn = radioIntervalFor(wanted);
+    }
+  }
+}
+// Stop now: fade any in-flight transmission out and reset the scheduler.
+// The scheduled stops + onended cleanup still disconnect every node.
+export function policeRadioStop() {
+  dispatchTimer = 0;
+  radioLastWanted = 0;
+  if (!radioTx) return;
+  const tx = radioTx; radioTx = null;
+  if (ctx && tx.gain) tx.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
 }
 
 // ---- gunshot (noise burst + low thump) ----
@@ -702,6 +857,7 @@ export function pauseAudio() {
   hornStop(); // fades its own gain, stops after 150 ms
   squealSet(0); // fades out, stops after 350 ms
   radioStop();
+  policeRadioStop(); // AUDIO-05: fade any in-flight dispatch, reset its scheduler
   clearTimeout(stopTimer);
   stopTimer = setTimeout(() => { stopTimer = null; engineStop(); sirenStop(); ambienceStop(); trafficStopAll(); }, 200);
 }
