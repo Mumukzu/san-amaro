@@ -43,10 +43,11 @@ export const MISSIONS = [
     speaker: { name: 'THEO · STREET KING', style: 'theo', skin: '#e8b88a', hair: '#8a8a8a' },
     brief: '“Four gates, one winner, Jay. Beat the clock and the street is yours.”',
     stages: [
-      { type: 'drive', marker: { x: 0, z: 120, r: 14 }, objective: 'Race — Gate 1 / 4', desc: 'Through the first gate. The clock is running.' },
-      { type: 'drive', marker: { x: 120, z: 120, r: 14 }, objective: 'Race — Gate 2 / 4', desc: 'Keep it clean. Second gate ahead.', line: '“Gate one down. Don’t lift.”' },
-      { type: 'drive', marker: { x: 120, z: -120, r: 14 }, objective: 'Race — Gate 3 / 4', desc: 'Halfway. Third gate on Coral Ave.', line: '“Halfway there. Push it.”' },
-      { type: 'drive', marker: { x: 0, z: -120, r: 14 }, objective: 'Race — Gate 4 / 4', desc: 'Final gate. Beat the par time.', line: '“Last gate. Everything you’ve got.”' },
+      // ONE drive stage with a gate list (the engine's race mode): the
+      // par timer only fails a stage that has gates, so four separate
+      // drive stages made the race untimed. Gates advance in order;
+      // beating par (150 s) is generous but the clock is real.
+      { type: 'drive', gates: [{ x: 0, z: 120, r: 14 }, { x: 120, z: 120, r: 14 }, { x: 120, z: -120, r: 14 }, { x: 0, z: -120, r: 14 }], objective: 'Race — beat the clock', desc: 'Four gates, one winner. Beat the par time.', line: '“Four gates, one winner, Jay. Beat the clock and the street is yours.”' },
     ],
   },
   {
@@ -76,7 +77,11 @@ export const MISSIONS = [
     speaker: { name: 'MARA · THE FIXER', style: 'mara', skin: '#f2c9a0', hair: '#e8c85a' },
     brief: '“Two clues, Jay. One at the plaza, one at the bridge. Walk it — don’t drive, you’ll spook them.”',
     stages: [
-      { type: 'interact', marker: { x: -90, z: 30, r: 8 }, objective: 'Search the plaza', desc: 'On foot. Walk to the fountain and press E.', line: '“First clue is at the fountain. On foot, Jay.”' },
+      // The fountain's collision keeps Jay >= 8.4 m from its centre
+      // (7.5 m basin + 0.9 m player radius), so an 8 m interact radius
+      // could never trigger — the clue was unreachable. 12 m lets Jay
+      // search the fountain from its edge.
+      { type: 'interact', marker: { x: -90, z: 30, r: 12 }, objective: 'Search the plaza', desc: 'On foot. Walk to the fountain and press E.', line: '“First clue is at the fountain. On foot, Jay.”' },
       { type: 'interact', marker: { x: 0, z: -270, r: 8 }, objective: 'Search the bridge', desc: 'On foot. Walk to the bridge and press E.', line: '“One more — the bridge, north end. Walk it.”' },
       { type: 'drive', marker: { x: -14, z: 26, r: 16 }, objective: 'Report back to the garage', desc: 'Drive back to Nadia with what you found.', line: '“That’s the whole trail. Bring it home.”' },
     ],

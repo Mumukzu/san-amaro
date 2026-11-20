@@ -614,6 +614,10 @@ window.addEventListener('keydown', (e) => {
     Audio.radioStart(state.radio); Audio.blip(990);
   }
   if (e.code === 'KeyM') saveGame();
+  // C cycles the camera: chase / side / wide. The side view is the
+  // pursuit view — it puts a chasing cruiser in the same frame as the
+  // player car, which the chase cam hides behind the car.
+  if (e.code === 'KeyC') cycleCamMode();
   // Palm & Piston garage services (on foot, near Nadia only)
   if (e.code === 'KeyF' && nearGarage()) garageRepair();
   if (e.code === 'KeyG' && nearGarage()) garageArmor();
@@ -895,10 +899,14 @@ function updateMissionHUD() {
   }
   const s = j.stages[state.mission.stage];
   const stageLabel = s.gates ? `Gate ${(state.mission.gate || 0) + 1} / ${s.gates.length}` : `Stage ${state.mission.stage + 1} / ${j.stages.length}`;
+  // progress: a gated stage fills by gate, not just by stage index
+  const fill = s.gates
+    ? (state.mission.stage + ((state.mission.gate || 0) / s.gates.length)) / j.stages.length
+    : state.mission.stage / j.stages.length;
   HUD.setMission({
     chapter: j.chapter, title: j.title,
     objective: s.objective, desc: s.desc,
-    fill: state.mission.stage / j.stages.length,
+    fill,
     stage: stageLabel,
     par: `+$${j.reward.money}`,
     time: `${fmtTime(state.missionT)} / ${fmtTime(j.par)}`,
@@ -1234,6 +1242,17 @@ let garageToastShown = false; // garage hint shown once per visit
 let camPos = new THREE.Vector3(0, 4, -12);
 let camLook = new THREE.Vector3(0, 1, 0);
 let heliAngle = 0;
+// Camera modes (C key): 0 chase (behind the car / Jay), 1 side (a
+// three-quarter view from the car's right flank — the pursuit view),
+// 2 wide (high, further back). The mode is a real gameplay control,
+// not a screenshot hack: the side view is how you see a cruiser
+// closing in from behind.
+let camMode = 0;
+const CAM_MODES = ['CHASE CAM', 'SIDE CAM', 'WIDE CAM'];
+function cycleCamMode() {
+  camMode = (camMode + 1) % CAM_MODES.length;
+  HUD.showToast('CAMERA', CAM_MODES[camMode], 1200);
+}
 
 function updatePlayer(dt) {
   const fwd = (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) - (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
@@ -1428,12 +1447,20 @@ function updatePolice(dt) {
     } else state.heatT = 0;
   } else state.heatT = 0;
   // wanted decays if the player is far from all cruisers: 55 m for 4 s.
-  // Completing an evade stage advances the mission.
-  const EVADE_DIST = 55, EVADE_HOLD = 4;
+  // Completing an evade stage advances the mission. A CLEAN BREAK —
+  // 110 m clear — ends the pursuit at once: the player has properly
+  // outrun the SAMPD, so the wanted level clears even outside a mission
+  // (the core GTA escape fantasy), and an evade stage completes on it.
+  const EVADE_DIST = 55, EVADE_HOLD = 4, EVADE_BREAK = 110;
   {
     let minDist = Infinity;
     for (const u of activeCruisers()) minDist = Math.min(minDist, u.group.position.distanceTo(target));
-    if (minDist > EVADE_DIST) {
+    if (minDist > EVADE_BREAK) {
+      state._clearT = 0;
+      const s = currentStage();
+      if (s && s.type === 'evade' && !state.mission.done) advanceStage();
+      setWanted(0);
+    } else if (minDist > EVADE_DIST) {
       state._clearT = (state._clearT || 0) + dt;
       if (state._clearT > EVADE_HOLD) {
         state._clearT = 0;
@@ -1613,6 +1640,17 @@ function collideCarPedestrians(dt) {
 function tickMission(dt) {
   const s = currentStage();
   if (!s || state.mode !== 'play') return;
+  // An evade stage is won the moment the wanted level is clear — however
+  // it got there. This matters because the clean-break (110 m) can clear
+  // the wanted level during the drive stage that precedes the evade: the
+  // player already outran the SAMPD, so the evade must complete at once
+  // instead of waiting on a pursuit that no longer exists (updatePolice
+  // early-returns while wanted is 0, so without this the stage could
+  // never advance).
+  if (s.type === 'evade' && state.wanted === 0 && !state.mission.done) {
+    advanceStage();
+    return;
+  }
   // par time: only the race fails on time (other jobs are untimed targets)
   if (s.gates && state.missionT > currentJob().par) {
     failJob('Out of time — the race is lost');
@@ -1651,17 +1689,32 @@ function updateCamera(dt) {
   if (SHOT) return; // staged shots set the camera explicitly
   const target = state.driving && state.car ? state.car.group : jay.group;
   const heading = target.rotation.y;
-  const back = state.driving ? 10.5 : 4.6;
-  const up = state.driving ? 4.4 : 2.4;
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  // right vector (perpendicular to heading)
+  const rx = fz, rz = -fx;
+  let back, up, side, lookFwd;
+  if (camMode === 1) {
+    // side: off the right flank, low — the car fills the frame and a
+    // cruiser chasing from behind is visible in the same shot
+    back = 2.5; up = 2.6; side = 9.5; lookFwd = 5;
+  } else if (camMode === 2) {
+    // wide: high and further back, more of the street in frame
+    back = 16; up = 9; side = 0; lookFwd = 6;
+  } else {
+    // chase: the default behind-the-car view
+    back = state.driving ? 10.5 : 4.6;
+    up = state.driving ? 4.4 : 2.4;
+    side = 0; lookFwd = 6;
+  }
   const desired = new THREE.Vector3(
-    target.position.x - Math.sin(heading) * back,
+    target.position.x - fx * back + rx * side,
     up,
-    target.position.z - Math.cos(heading) * back);
+    target.position.z - fz * back + rz * side);
   camPos.lerp(desired, 1 - Math.pow(0.001, dt));
   const look = new THREE.Vector3(
-    target.position.x + Math.sin(heading) * 6,
+    target.position.x + fx * lookFwd,
     state.driving ? 1.4 : 1.5,
-    target.position.z + Math.cos(heading) * 6);
+    target.position.z + fz * lookFwd);
   camLook.lerp(look, 1 - Math.pow(0.0005, dt));
   camera.position.copy(camPos);
   camera.lookAt(camLook);
