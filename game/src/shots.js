@@ -944,6 +944,13 @@ function shotProofPursuit(G) {
 
 export const SHOTS = { 1: shotChase, 2: shotShootout, 3: shotMission, 4: shotJump, 5: shotCineChase, 6: shotCineSpire, 7: shotCinePlaza, 8: shotCineNeon, 9: shotCineBridge, 10: shotReviewAerial, 11: shotReviewDowntown, 12: shotReviewCommercial, 13: shotReviewResidential, 14: shotReviewIntersection, 15: shotReviewStreet, 16: shotReviewDriving, 17: shotKeyArtJay, 18: shotNightChase, 19: shotBridgeSign, 20: shotPlazaDay, 21: shotDowntownCanyon, 22: shotProofOnFoot, 23: shotProofDriving, 24: shotProofPursuit, 25: shotMainCoverV3, 26: shotSpireBluehour, 27: shotBridgeNight, 28: shotMainCoverV4 };
 
+// Highest valid shot number, derived from SHOTS so it stays correct when
+// shots are added or removed. main.js clamps the ?shot= URL parameter to
+// this; setupShot clamps again as a safety net. (The old hard-coded clamp
+// of 30 let ?shot=29/30 through, and SHOTS[29] is undefined — setupShot
+// threw. Now out-of-range numbers land on the nearest valid shot.)
+export const MAX_SHOT = Math.max(...Object.keys(SHOTS).map(Number));
+
 // ---- Shot 28: MAIN COVER v4 — Jay readable, car dominant, cruiser visible ----
 // v3-25 failed the cover test: Jay sat at the frame edge (~44 deg off the
 // camera axis) and read as a dark smudge, not a person. v4 candidate 1
@@ -1111,6 +1118,11 @@ function shotBridgeNight(G) {
   G.minimapState = { player: { x: 0, z: -245, heading: Math.PI }, police: [{ x: -6, z: -252, color: '#ff2a1a' }], marker: { x: 0, z: -300 } };
 }
 export function setupShot(n, G) {
+  // Guard: clamp to a valid shot. Out-of-range numbers (e.g. ?shot=29/30
+  // from the old clamp) used to throw on SHOTS[n](G) because SHOTS[n] was
+  // undefined. Now they land on the nearest valid shot instead of
+  // crashing the page.
+  n = Math.max(1, Math.min(MAX_SHOT, Math.floor(n) || 1));
   // clear per-shot props from the previous shot
   for (const p of G.shotProps) G.scene.remove(p);
   G.shotProps.length = 0;

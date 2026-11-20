@@ -10,13 +10,13 @@ import { buildJay, buildNadia, buildTheo, buildMara, buildPerson, walkCycle, aim
 import { MISSIONS, rankFor, XP_MAX } from './missions.js';
 import * as HUD from './hud.js';
 import * as Audio from './audio.js';
-import { setupShot } from './shots.js';
+import { setupShot, MAX_SHOT } from './shots.js';
 
 // ---------- helpers ----------
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const params = new URLSearchParams(location.search);
-const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, 30) : 0;
+const SHOT = params.has('shot') ? clamp(parseInt(params.get('shot') || '1', 10) || 1, 1, MAX_SHOT) : 0;
 window.__shotReady = false;
 window.__shot = SHOT;
 
