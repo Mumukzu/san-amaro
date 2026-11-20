@@ -1089,24 +1089,26 @@ function shotSpireBluehour(G) {
 function shotBridgeNight(G) {
   const { scene, camera } = G;
   const car = G.playerCar;
-  // v2's car read as a dark blob: 15 m away, rear-on at night, at the
-  // bottom edge. v3 brings it to 11 m, turned three-quarter (north-east)
-  // so the cyan side strip and flank catch the lamps, and pulls the
-  // camera closer and lower so the car sits mid-frame, not at the edge.
-  car.group.position.set(2, 0, -226);
-  car.group.rotation.set(0, Math.PI * 0.75, 0); // three-quarter, toward the bridge
+  // v6: v4 (31 m) cleared the sign but the car was invisible at night;
+  // v5 (11 m) showed the car but pushed the sign under the mission
+  // panel. v6 is the middle ground — camera 20 m back on the approach,
+  // looking right of the sign and slightly up, so the sign sits in the
+  // left third BELOW the mission panel while the Comet GT stays big
+  // enough in the foreground for its cyan strip to read.
+  car.group.position.set(0, 0, -245);
+  car.group.rotation.set(0, Math.PI * 0.75, 0); // three-quarter, side to camera
   car.group.visible = true;
   setAirPitch(car, 0, 0);
-  G.police[0].group.position.set(-8, 0, -234);
+  G.police[0].group.position.set(-6, 0, -252);
   G.police[0].group.rotation.set(0, Math.PI, 0);
   G.police[0].group.visible = true;
   G.police[1].group.visible = false;
   G.police[2].group.visible = false;
-  camera.position.set(10, 2, -218);
-  camera.lookAt(-4, 7, -275);
+  camera.position.set(0, 3, -225);
+  camera.lookAt(10, 8, -280);
   camera.fov = 55; camera.updateProjectionMatrix();
   newShotHUD(G, 'FIRST WHEELS', 'Lose the police', 'The bridge at night — the only way out is up.', 'COMET GT · SPORTS', 63);
-  G.minimapState = { player: { x: 2, z: -226, heading: Math.PI }, police: [{ x: -8, z: -234, color: '#ff2a1a' }], marker: { x: 0, z: -300 } };
+  G.minimapState = { player: { x: 0, z: -245, heading: Math.PI }, police: [{ x: -6, z: -252, color: '#ff2a1a' }], marker: { x: 0, z: -300 } };
 }
 export function setupShot(n, G) {
   // clear per-shot props from the previous shot
